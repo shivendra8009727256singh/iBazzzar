@@ -1,0 +1,343 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+}
+model User {
+  id String @id @default(uuid())
+  email String @unique
+  name String
+  passwordHash String
+  role String @default("CUSTOMER")
+  status String @default("ACTIVE")
+  sellerId String?
+  sellerRole String?
+  organizationId String?
+  organizationRole String?
+  phone String? @unique
+  emailVerifiedAt String?
+  termsAcceptedAt String?
+  marketingOptIn Boolean @default(false)
+  failedLogins Int @default(0)
+  lockedUntil String?
+  createdAt String
+  sessions Session[]
+  orders Order[]
+  seller Seller? @relation(fields: [sellerId], references: [id])
+  organization Organization? @relation(fields: [organizationId], references: [id])
+}
+model Session {
+  id String @id
+  userId String
+  expiresAt String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+}
+model Seller {
+  id String @id @default(uuid())
+  name String
+  ownerId String
+  status String @default("PENDING")
+  description String @default("")
+  legalName String?
+  businessType String?
+  gstRegistered Boolean @default(false)
+  gstin String?
+  pan String?
+  contactPhone String?
+  pickupAddress Json?
+  primaryCategory String?
+  termsAcceptedAt String?
+  createdAt String
+  users User[]
+  products Product[]
+}
+model Organization {
+  id String @id @default(uuid())
+  name String
+  ownerId String
+  status String @default("PENDING")
+  gstin String?
+  tradeName String?
+  businessType String?
+  gstRegistered Boolean @default(false)
+  pan String?
+  contactPhone String?
+  address Json?
+  approvalThresholdPaise Decimal @default(0) @db.Decimal(14,0)
+  createdAt String
+  users User[]
+  rfqs Rfq[]
+  purchaseOrders PurchaseOrder[]
+}
+model Product {
+  id String @id @default(uuid())
+  slug String @unique
+  name String
+  brand String
+  category String
+  description String
+  pricePaise Decimal @db.Decimal(14,0)
+  stock Int
+  moq Int @default(1)
+  tiers Json
+  image String
+  images Json @default("[]")
+  variantGroup String?
+  variantLabel String?
+  featured Boolean @default(false)
+  status String @default("PENDING")
+  sellerId String
+  demo Boolean @default(false)
+  seller Seller @relation(fields: [sellerId], references: [id])
+  @@index([category, status])
+  @@index([sellerId])
+  @@index([variantGroup])
+}
+model Order {
+  id String @id @default(uuid())
+  userId String
+  mode String
+  status String
+  subtotalPaise Decimal @db.Decimal(14,0)
+  discountPaise Decimal @default(0) @db.Decimal(14,0)
+  couponCode String?
+  totalPaise Decimal @db.Decimal(14,0)
+  items Json
+  address Json
+  fulfillments Json @default("[]")
+  history Json
+  paymentStatus String
+  paymentRef String?
+  createdAt String
+  user User @relation(fields: [userId], references: [id])
+  returns ReturnRequest[]
+  refunds Refund[]
+  @@index([userId, createdAt])
+}
+model IdempotencyKey {
+  id String @id
+  fingerprint String
+  orderId String
+}
+model Rfq {
+  id String @id @default(uuid())
+  organizationId String
+  userId String
+  productId String
+  sellerId String
+  quantity Int
+  notes String
+  status String
+  createdAt String
+  organization Organization @relation(fields: [organizationId], references: [id])
+  quotations Quotation[]
+  @@index([sellerId, status])
+}
+model Quotation {
+  id String @id @default(uuid())
+  rfqId String
+  sellerId String
+  pricePaise Decimal @db.Decimal(14,0)
+  quantity Int
+  terms String
+  validUntil String
+  revision Int
+  status String
+  createdAt String
+  rfq Rfq @relation(fields: [rfqId], references: [id])
+  purchaseOrders PurchaseOrder[]
+}
+model PurchaseOrder {
+  id String @id @default(uuid())
+  organizationId String
+  quoteId String @unique
+  sellerId String?
+  requestedBy String
+  approvedBy String?
+  status String
+  totalPaise Decimal @db.Decimal(14,0)
+  snapshot Json
+  history Json @default("[]")
+  createdAt String
+  organization Organization @relation(fields: [organizationId], references: [id])
+  quote Quotation @relation(fields: [quoteId], references: [id])
+}
+model ReturnRequest {
+  id String @id @default(uuid())
+  orderId String
+  userId String
+  sellerId String
+  reason String
+  status String
+  decidedBy String?
+  note String?
+  createdAt String
+  order Order @relation(fields: [orderId], references: [id])
+  @@unique([orderId, sellerId])
+  @@index([sellerId, status])
+}
+model AuditLog {
+  id String @id @default(uuid())
+  actorId String
+  action String
+  resourceId String
+  createdAt String
+  @@index([createdAt])
+}
+model Subscription {
+  id String @id
+  email String @unique
+  consent Boolean
+  unsubscribeHash String
+  createdAt String
+}
+model CmsSection {
+  id String @id
+  heading String
+  body String
+  version Int
+}
+model PaymentEvent {
+  id String @id
+  orderId String
+  createdAt String
+}
+model PaymentIntent {
+  id String @id
+  orderId String
+  amountPaise Decimal @db.Decimal(14,0)
+  status String
+  createdAt String
+}
+model Coupon {
+  id String @id @default(uuid())
+  code String @unique
+  description String
+  kind String
+  value Int
+  maxDiscountPaise Decimal? @db.Decimal(14,0)
+  minOrderPaise Decimal @default(0) @db.Decimal(14,0)
+  mode String @default("any")
+  startsAt String
+  endsAt String
+  usageLimit Int?
+  used Int @default(0)
+  active Boolean @default(true)
+  public Boolean @default(false)
+  createdAt String
+}
+model Review {
+  id String @id @default(uuid())
+  productId String
+  userId String
+  authorName String
+  rating Int
+  title String
+  body String
+  verified Boolean @default(true)
+  status String
+  createdAt String
+  @@unique([productId, userId])
+  @@index([productId, status])
+}
+model Refund {
+  id String @id @default(uuid())
+  orderId String
+  sellerId String
+  returnId String?
+  amountPaise Decimal @db.Decimal(14,0)
+  reason String
+  status String
+  providerRef String?
+  processedAt String?
+  createdAt String
+  order Order @relation(fields: [orderId], references: [id])
+  @@index([status])
+}
+model LedgerEntry {
+  id String @id @default(uuid())
+  sellerId String
+  orderId String
+  kind String
+  amountPaise Decimal @db.Decimal(14,0)
+  status String
+  providerRef String?
+  demo Boolean @default(false)
+  createdAt String
+  @@index([sellerId, createdAt])
+  @@index([orderId])
+}
+model Address {
+  id String @id @default(uuid())
+  userId String
+  label String
+  name String
+  line1 String
+  city String
+  state String
+  pincode String
+  phone String
+  createdAt String
+  @@index([userId])
+}
+model SupportTicket {
+  id String @id @default(uuid())
+  userId String
+  subject String
+  orderId String?
+  status String
+  messages Json
+  createdAt String
+  updatedAt String
+  @@index([userId])
+  @@index([status, updatedAt])
+}
+model Notification {
+  id String @id @default(uuid())
+  userId String
+  title String
+  body String
+  link String?
+  read Boolean @default(false)
+  createdAt String
+  @@index([userId, createdAt])
+}
+model Setting {
+  id String @id
+  value Json
+}
+model MediaAsset {
+  id String @id
+  sellerId String
+  url String
+  width Int
+  height Int
+  bytes Int
+  createdAt String
+  @@index([sellerId])
+}
+model PasswordResetToken {
+  id String @id
+  userId String
+  expiresAt String
+  createdAt String
+  @@index([userId])
+}
+model EmailVerificationToken {
+  id String @id
+  userId String
+  expiresAt String
+  createdAt String
+  @@index([userId])
+}
+model Category {
+  id String @id
+  name String @unique
+  slug String @unique
+  description String?
+  active Boolean @default(true)
+  sortOrder Int @default(0)
+  createdAt String
+}

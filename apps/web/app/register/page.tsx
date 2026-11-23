@@ -1,0 +1,6 @@
+import Image from 'next/image';
+import {Logo} from '@/components/logo';
+import {RegisterForm,type AccountType} from '@/components/auth/register-form';
+export const metadata={title:'Create your account'};
+export default async function Page({searchParams}:{searchParams:Promise<{type?:string;next?:string}>}){const {type,next}=await searchParams;const t=(['customer','business','seller'].includes(type??'')?type:null) as AccountType|null;
+ return <div className="auth-layout register-layout"><section className="auth-brand"><Image src="/images/mall-concept.webp" alt="" fill sizes="40vw"/><div><div className="logo-plate"><Logo size="hero"/></div><span className="eyebrow" style={{color:'#dcc58e'}}>ONE LOGIN. EVERY WAY TO TRADE.</span><h1>Shop, source and sell.</h1><p>One IBazzzar account can shop for you, buy for your business and run your store. Business and seller details are reviewed by our team before they’re marked verified.</p><ul className="auth-points"><li>Passwords are hashed; card details never touch our servers</li><li>GSTIN format and checksum checked instantly</li><li>Your data is used only to run your account and orders</li></ul></div></section><div className="auth-form wide"><RegisterForm initialType={t} next={next??null}/></div></div>;}

@@ -1,0 +1,6 @@
+'use client';
+import Link from 'next/link';
+import {usePathname} from 'next/navigation';
+import {ArrowUpRight} from 'lucide-react';
+import {Logo} from './logo';
+export function Footer(){const path=usePathname();if(path.startsWith('/superadmin'))return null;return <footer><div className="container footer-grid"><div><Logo size="footer"/><p>A world of thoughtful finds.<br/>For your everyday. For your business.</p><span className="eyebrow">Discover more. Choose well.</span></div>{[{title:'Explore the mall',links:[['All products','/products'],['Deals & offers','/deals'],['Brands & sellers','/brands'],['Wholesale','/wholesale'],['Your wishlist','/wishlist']]},{title:'Build with us',links:[['Become a seller','/sell'],['Seller workspace','/seller'],['Business workspace','/business']]},{title:'Here to help',links:[['Help centre','/help'],['Track your orders','/account'],['Support tickets','/account?tab=support'],['Privacy & terms','/help/policies']]}].map(g=><div key={g.title}><h3>{g.title}</h3>{g.links.map(([label,href])=><Link key={label} href={href}>{label}<ArrowUpRight size={12}/></Link>)}</div>)}</div><div className="container footer-bottom"><span>© {new Date().getFullYear()} IBazzzar. Intelligent Digital Mall.</span><span>Development preview · Illustrative catalogue · No live transactions</span></div></footer>;}

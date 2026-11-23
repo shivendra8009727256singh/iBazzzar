@@ -1,0 +1,6 @@
+'use client';
+import {useState} from 'react';
+import {Bot,X,ArrowRight} from 'lucide-react';
+import Link from 'next/link';
+import {usePathname} from 'next/navigation';
+export function Assistant(){const [open,setOpen]=useState(false),path=usePathname();if(path.startsWith('/admin')||path.startsWith('/superadmin'))return null;return <div className="assistant">{open&&<section className="assistant-panel" aria-label="Guided shopping assistant"><div className="flex-between"><h3>A little guidance?</h3><button aria-label="Close assistant" onClick={()=>setOpen(false)}><X size={18}/></button></div><p>I can point you in the right direction. This is a guided assistant, with no AI service connected.</p>{[['Find something for home','/products?category=Home%20%26%20Living'],['Source for my business','/wholesale'],['See my orders','/account'],['Get shopping help','/help']].map(([name,url])=><Link key={url} href={url} onClick={()=>setOpen(false)}>{name}<ArrowRight size={15}/></Link>)}</section>}<button className="assistant-trigger" onClick={()=>setOpen(!open)} aria-expanded={open} aria-label="Open guided shopping assistant"><Bot size={23}/><span>Ask IBazzzar</span><span className="online-dot"/></button></div>;}
