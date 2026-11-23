@@ -158,15 +158,15 @@ export default function AdminPage({ params }: { params: Promise<{ section?: stri
 
   const sidebar = (
     <aside aria-label="Admin navigation"
-      className={cn('bg-white border-r border-line flex flex-col fixed inset-y-0 left-0 z-50 transition-[width,transform] duration-200 print:hidden lg:sticky lg:top-0 lg:h-screen lg:translate-x-0',
+      className={cn('bg-[#e6f1e7] border-r border-[#d3e4d5] flex flex-col fixed inset-y-0 left-0 z-50 transition-[width,transform] duration-200 print:hidden lg:sticky lg:top-0 lg:h-screen lg:translate-x-0',
         mobileOpen ? 'translate-x-0 w-[272px]' : '-translate-x-full w-[272px]', collapsed ? 'lg:w-[84px]' : 'lg:w-[264px]')}>
-      <div className={cn('flex items-center gap-2 border-b border-line', narrow ? 'lg:flex-col lg:py-3 lg:px-2 px-4 py-4' : 'px-4 py-4')}>
+      <div className={cn('flex items-center gap-2 border-b border-[#d3e4d5]', narrow ? 'lg:flex-col lg:py-3 lg:px-2 px-4 py-4' : 'px-4 py-4')}>
         <Link href="/admin" className={cn('flex flex-col gap-1.5 min-w-0', narrow && 'lg:items-center')} aria-label="IBazzzar admin home">
           {narrow
             ? <Image src="/icon.png" alt="IBazzzar" width={40} height={40} className="size-10 rounded-xl hidden lg:block" />
             : null}
-          <Image src="/branding/ibazzzar-logo.png" alt="IBazzzar" width={1621} height={685} sizes="150px" className={cn('h-auto w-[132px]', narrow && 'lg:hidden')} priority />
-          <span className={cn('self-start rounded-full bg-mint text-forest text-[10.5px] font-bold tracking-[0.14em] uppercase px-2.5 py-0.5', narrow && 'lg:hidden')}>Admin panel</span>
+          <Image src="/branding/ibazzzar-logo.png" alt="IBazzzar" width={1621} height={685} sizes="150px" className={cn('h-auto w-[140px] bg-white rounded-xl px-2.5 py-1.5 shadow-sm', narrow && 'lg:hidden')} priority />
+          <span className={cn('self-start rounded-full bg-white text-forest text-[10.5px] font-bold tracking-[0.14em] uppercase px-2.5 py-0.5', narrow && 'lg:hidden')}>Admin panel</span>
         </Link>
         <button type="button" onClick={() => (mobileOpen ? setMobileOpen(false) : toggleCollapsed())} aria-label={mobileOpen ? 'Close menu' : collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           className={cn('ml-auto size-9 rounded-lg border border-line grid place-items-center text-muted hover:text-forest hover:border-forest shrink-0', narrow && 'lg:ml-0')}>
@@ -177,7 +177,7 @@ export default function AdminPage({ params }: { params: Promise<{ section?: stri
         {groups.map((g) => (
           <div key={g}>
             <p className={cn('px-2.5 mb-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-muted/80', narrow && 'lg:hidden')}>{g}</p>
-            {narrow && <span className="hidden lg:block h-px bg-line mx-2 mb-2" aria-hidden />}
+            {narrow && <span className="hidden lg:block h-px bg-[#d3e4d5] mx-2 mb-2" aria-hidden />}
             <ul className="grid gap-1">
               {visible.filter((i) => i.group === g).map((i) => {
                 const on = active?.id === i.id;
@@ -185,7 +185,7 @@ export default function AdminPage({ params }: { params: Promise<{ section?: stri
                   <li key={i.id}>
                     <Link href={`/admin/${i.id}`} onClick={() => setMobileOpen(false)} aria-current={on ? 'page' : undefined} title={narrow ? i.label : undefined} aria-label={narrow ? i.label : undefined}
                       className={cn('group flex items-center gap-3 rounded-xl px-2 py-1.5 text-[14.5px] transition', narrow && 'lg:justify-center',
-                        on ? 'bg-forest text-white font-semibold shadow-[0_6px_16px_-8px_rgb(23_75_55/0.7)]' : 'text-ink/85 hover:bg-mint/70')}>
+                        on ? 'bg-forest text-white font-semibold shadow-[0_6px_16px_-8px_rgb(23_75_55/0.7)]' : 'text-ink/85 hover:bg-white/70')}>
                       <span className={cn('size-9 rounded-lg grid place-items-center shrink-0 border transition', on ? 'bg-white/15 border-transparent text-gold-light' : 'bg-white border-line text-forest group-hover:border-forest/40')}><i.icon size={17} /></span>
                       <span className={cn('flex-1 truncate', narrow && 'lg:hidden')}>{i.label}</span>
                       {on && <span className={cn('size-2 rounded-full bg-gold-light mr-1', narrow && 'lg:hidden')} aria-hidden />}
@@ -197,7 +197,7 @@ export default function AdminPage({ params }: { params: Promise<{ section?: stri
           </div>
         ))}
       </nav>
-      <div className={cn('border-t border-line p-3 text-xs text-muted', narrow && 'lg:hidden')}>Signed in as {roleLabel}</div>
+      <div className={cn('border-t border-[#d3e4d5] p-3 text-xs text-muted', narrow && 'lg:hidden')}>Signed in as {roleLabel}</div>
     </aside>
   );
 
