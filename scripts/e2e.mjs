@@ -13,12 +13,15 @@ const env = {
   ...process.env, NODE_ENV: 'development', DATABASE_URL: db.url, DATABASE_CA_CERT_FILE: '', DATABASE_SSL_REJECT_UNAUTHORIZED: 'true',
   PORT: String(apiPort), HOST: '127.0.0.1', WEB_ORIGIN: origin, API_ORIGIN: `http://127.0.0.1:${apiPort}`, REDIS_URL: '',
   DEMO_PAYMENTS: 'true', RAZORPAY_KEY_ID: '', RAZORPAY_KEY_SECRET: '', RAZORPAY_WEBHOOK_SECRET: '', MAIL_PROVIDER: 'console',
-  STORAGE_DRIVER: 'local', MEDIA_DIR: resolve(ROOT, '.local', 'e2e-uploads'), BOOTSTRAP_ADMIN_EMAIL: 'e2e-admin@example.test', LOG_LEVEL: 'info',
+  STORAGE_DRIVER: 'local', MEDIA_DIR: resolve(ROOT, '.local', 'e2e-uploads'), SUPERADMIN_NAME: 'E2E Super Admin', SUPERADMIN_EMAIL: 'e2e-superadmin@example.test', SUPERADMIN_PASSWORD: 'Console-Keeper-Phrase-2026', LOG_LEVEL: 'info',
 };
 let api;
 let web;
 let status = 1;
 try {
+  // The Super Admin is created exactly as in production: by the script, from environment values.
+  const made = spawnSync(process.execPath, ['scripts/create-superadmin.mjs'], { cwd: ROOT, env, encoding: 'utf8', windowsHide: true });
+  if (made.status !== 0) throw new Error(made.stderr || made.stdout);
   api = await startProcess('API', ['apps/api/src/server.js'], env, 'IBazzzar API ready');
   web = await startProcess('Web', [resolve(ROOT, 'node_modules/next/dist/bin/next'), 'start', 'apps/web', '-H', '127.0.0.1', '-p', String(webPort)], env, 'Ready');
   const run = spawnSync(process.execPath, [resolve(ROOT, 'node_modules/@playwright/test/cli.js'), 'test', '--config', 'tests/e2e/playwright.config.js', ...process.argv.slice(2)], {

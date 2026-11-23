@@ -5,13 +5,10 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { Eye, EyeOff } from 'lucide-react';
 import { post } from '@/lib/api';
+import { loginDestination } from '@/lib/login-destination';
 import type { User } from '@/lib/types';
 import { AuthShell } from '@/components/auth-shell';
 import { Alert, Button, Field, Input, useFormErrors } from '@/components/ui';
-
-function safeNext(next: string | null) {
-  return next && next.startsWith('/') && !next.startsWith('//') ? next : null;
-}
 
 function LoginForm() {
   const router = useRouter();
@@ -31,8 +28,7 @@ function LoginForm() {
       const { user } = await post<{ user: User }>('/auth/login', { email, password });
       qc.setQueryData(['me'], user);
       await qc.invalidateQueries();
-      const next = safeNext(params.get('next'));
-      router.push(next ?? (portal === 'staff' && user.staffRole ? '/admin' : portal === 'seller' && user.stores.length ? '/seller' : portal === 'business' && user.organizations.length ? '/business' : '/account'));
+      router.push(loginDestination(user, portal, params.get('next')));
       router.refresh();
     } catch (err) { errors.set(err); setBusy(false); }
   };

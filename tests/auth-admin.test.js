@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
-import { createContext, ORIGIN, nextPhone } from './setup/context.js';
+import { createContext, ORIGIN, nextPhone, ADMIN_EMAIL, ADMIN_PASSWORD } from './setup/context.js';
 
 let ctx;
 let admin;
@@ -67,8 +67,59 @@ describe('Accounts and sessions', () => {
 });
 
 describe('Staff permissions', () => {
-  it('the bootstrap account is the Super Admin', async () => {
+  it('the script-created account is the Super Admin, with a short session', async () => {
     expect((await admin.agent.get('/api/admin/me')).body.role).toBe('ADMIN');
+    const session = await ctx.prisma.session.findFirst({ where: { userId: admin.user.id } });
+    expect(session.expiresAt.getTime() - Date.now()).toBeLessThanOrEqual(12 * 3_600_000 + 5_000);
+  });
+
+  it('registration never creates a Super Admin, not even the very first account', async () => {
+    const fresh = await createContext({ demo: false });
+    try {
+      const first = await fresh.register('customer', { email: 'first@example.test' });
+      expect(first.user.roles).toEqual([]);
+      expect(await fresh.prisma.userRole.count()).toBe(0);
+    } finally { await fresh.close(); }
+  });
+
+  it('the Super Admin can only sign in on the Super Admin page', async () => {
+    const normal = await ctx.agent().post('/api/auth/login').send({ email: ADMIN_EMAIL, password: ADMIN_PASSWORD });
+    expect(normal.status).toBe(403);
+    expect(normal.body.error).toMatch(/Super Admin sign-in page/);
+    expect(normal.headers['set-cookie']).toBeUndefined();
+  });
+
+  it('the Super Admin page refuses every other account with a generic answer', async () => {
+    const shopper = await ctx.register();
+    const res = await ctx.agent().post('/api/auth/superadmin/login').send({ email: shopper.email, password: 'Correct horse battery 9' });
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe('Email or password is incorrect');
+  });
+
+  it('nobody can be made Super Admin from the console, and the Super Admin account is locked there', async () => {
+    const someone = await ctx.register();
+    const grant = await admin.agent.put(`/api/admin/users/${someone.user.id}/roles`).send({ roles: ['ADMIN'] });
+    expect(grant.status).toBe(400);
+    expect((await admin.agent.patch(`/api/admin/users/${admin.user.id}/status`).send({ status: 'SUSPENDED', reason: 'Testing the lock' })).status).toBe(409);
+    expect(await ctx.prisma.userRole.count({ where: { role: 'ADMIN' } })).toBe(1);
+  });
+
+  it('email password reset is not available for the Super Admin', async () => {
+    const before = ctx.mails.length;
+    const res = await ctx.agent().post('/api/auth/password-reset/request').send({ email: ADMIN_EMAIL });
+    expect(res.status).toBe(200);
+    expect(ctx.mails.length).toBe(before);
+  });
+
+  it('a stale cookie from an older build does not hide a fresh session', async () => {
+    const { email } = await ctx.register();
+    const login = await ctx.agent().post('/api/auth/login').send({ email, password: 'Correct horse battery 9' });
+    const fresh = login.headers['set-cookie'].find((c) => c.startsWith('ib_session=') && !c.startsWith('ib_session=;')).split(';')[0];
+    // The browser sends the more specific Path=/api cookie first.
+    const res = await request(ctx.app).get('/api/auth/me').set('Cookie', `ib_session=${'b'.repeat(64)}; ${fresh}`);
+    expect(res.status).toBe(200);
+    expect(login.headers['set-cookie'].some((c) => c.startsWith('ib_session=;') && c.includes('Path=/api'))).toBe(true);
+    expect((await request(ctx.app).get('/api/auth/session')).body).toEqual({ user: null });
   });
 
   it('a support agent can work tickets but not see finance or change roles', async () => {
@@ -90,7 +141,7 @@ describe('Staff permissions', () => {
     }
   });
 
-  it('the last Super Admin cannot be removed, and nobody edits their own roles', async () => {
+  it('nobody edits their own roles', async () => {
     expect((await admin.agent.put(`/api/admin/users/${admin.user.id}/roles`).send({ roles: [] })).status).toBe(409);
   });
 

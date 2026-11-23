@@ -100,15 +100,16 @@ function UserPanel({ id, onClose, canManage, canStaff }: { id: string; onClose: 
       {data && (
         <div className="grid gap-5">
           <div className="flex flex-wrap gap-2"><StatusBadge status={data.user.status} />{data.user.emailVerifiedAt ? <Badge tone="success">Email confirmed</Badge> : <Badge tone="warning">Email not confirmed</Badge>}{data.user.locked && <Badge tone="warning">Locked after failed sign-ins</Badge>}</div>
-          {canManage && (
+          {canManage && !data.user.roles.includes('ADMIN') && (
             <div className="flex flex-wrap gap-2">
               <ConfirmButton danger={data.user.status === 'ACTIVE'} title={data.user.status === 'ACTIVE' ? 'Suspend this account?' : 'Restore this account?'} body={data.user.status === 'ACTIVE' ? 'They are signed out everywhere and cannot sign in.' : undefined} reason={{ label: 'Reason (kept in the audit log)' }} confirmLabel={data.user.status === 'ACTIVE' ? 'Suspend' : 'Restore'} onConfirm={async (reason) => { await patch(`/admin/users/${id}/status`, { status: data.user.status === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE', reason }); refetch(); }}>{data.user.status === 'ACTIVE' ? 'Suspend' : 'Restore'}</ConfirmButton>
               {data.user.locked && <Button size="sm" variant="outline" onClick={async () => { await post(`/admin/users/${id}/unlock`); refetch(); }}>Unlock sign-in</Button>}
             </div>
           )}
-          {canStaff && (
+          {data.user.roles.includes('ADMIN') && <Alert tone="info">This is the Super Admin account. Its role, password and status are managed only with the server’s superadmin script.</Alert>}
+          {canStaff && !data.user.roles.includes('ADMIN') && (
             <fieldset className="rounded-xl border border-line p-4"><legend className="label px-1">Staff roles</legend>
-              <div className="flex flex-wrap gap-4">{['ADMIN', 'OPERATIONS', 'FINANCE', 'SUPPORT'].map((r) => <label key={r} className="flex items-center gap-2 text-sm"><input type="checkbox" className="checkbox mt-0" checked={(roles ?? data.user.roles).includes(r)} onChange={(e) => setRoles(e.target.checked ? [...(roles ?? data.user.roles), r] : (roles ?? data.user.roles).filter((x) => x !== r))} />{label(r)}</label>)}</div>
+              <div className="flex flex-wrap gap-4">{['OPERATIONS', 'FINANCE', 'SUPPORT'].map((r) => <label key={r} className="flex items-center gap-2 text-sm"><input type="checkbox" className="checkbox mt-0" checked={(roles ?? data.user.roles).includes(r)} onChange={(e) => setRoles(e.target.checked ? [...(roles ?? data.user.roles), r] : (roles ?? data.user.roles).filter((x) => x !== r))} />{label(r)}</label>)}</div>
               {roles && <Button size="sm" className="mt-3" onClick={async () => { try { await put(`/admin/users/${id}/roles`, { roles }); toast.success('Roles updated; they’ll be asked to sign in again'); setRoles(null); refetch(); } catch (e) { toast.error((e as Error).message); } }}>Save roles</Button>}
             </fieldset>
           )}
@@ -124,7 +125,7 @@ function UserPanel({ id, onClose, canManage, canStaff }: { id: string; onClose: 
 export function StaffRoles() {
   const query = useQuery({ queryKey: ['admin', 'staff'], queryFn: () => api<{ staff: { id: string; name: string; email: string; status: string; roles: string[] }[]; roles: { id: string; label: string; description: string }[] }>('/admin/staff') });
   return (
-    <Section title="Staff roles" description="Grant roles from People → Open. At least one Super Admin always remains. Role changes sign the person out.">
+    <Section title="Staff roles" description="Grant Operations, Finance or Support from People → Open. Nobody can be made Super Admin from the console. Role changes sign the person out.">
       <Loadable query={query}>{(d) => (
         <div className="grid gap-5">
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">{d.roles.map((r) => <div key={r.id} className="card card-pad"><p className="font-semibold">{r.label}</p><p className="text-sm text-muted mt-1">{r.description}</p></div>)}</div>

@@ -10,6 +10,7 @@ import { getSetting } from '../../services/settings.js';
 import { loadListingsWhere } from '../../services/catalog.js';
 
 const m = toPaise;
+const ASSIGNABLE_STAFF_ROLES = ['OPERATIONS', 'FINANCE', 'SUPPORT'];
 const reason = z.string().trim().min(5, 'Please give a short reason (at least 5 characters)').max(300);
 
 export function registerAdminPeople(app, { prisma }) {
@@ -118,6 +119,7 @@ export function registerAdminPeople(app, { prisma }) {
     await transaction(prisma, async (tx) => {
       const u = await tx.user.findUnique({ where: { id }, include: { roles: true } });
       if (!u) throw new DomainError('User not found', 404);
+      if (u.roles.some((r) => r.role === 'ADMIN')) throw new DomainError('The Super Admin account can’t be suspended from the console', 403);
       if (u.roles.length && !req.staffRoles.includes('ADMIN')) throw new DomainError('Only a Super Admin can suspend staff accounts', 403);
       await tx.user.update({ where: { id }, data: { status: input.status } });
       // Suspension signs the person out everywhere immediately.
@@ -137,13 +139,15 @@ export function registerAdminPeople(app, { prisma }) {
   /** Grants or removes staff roles. Only a Super Admin can do this, and never on their own account. */
   app.put('/api/admin/users/:id/roles', requireStaff('staff.manage'), async (req, res) => {
     const id = uuid.parse(req.params.id);
-    const { roles } = z.object({ roles: z.array(z.enum(Object.keys(staffRoles))).max(4) }).parse(req.body);
+    // ADMIN is never assignable here: the Super Admin exists only through scripts/create-superadmin.mjs.
+    const { roles } = z.object({ roles: z.array(z.enum(ASSIGNABLE_STAFF_ROLES, { message: 'Super Admin can’t be granted from the console' })).max(3) }).parse(req.body);
     if (id === req.user.id) throw new DomainError('You can’t change your own roles', 409);
     await transaction(prisma, async (tx) => {
-      if (!await tx.user.findUnique({ where: { id } })) throw new DomainError('User not found', 404);
+      const target = await tx.user.findUnique({ where: { id }, include: { roles: true } });
+      if (!target) throw new DomainError('User not found', 404);
+      if (target.roles.some((r) => r.role === 'ADMIN')) throw new DomainError('The Super Admin account can’t be changed from the console', 403);
       await tx.userRole.deleteMany({ where: { userId: id } });
       if (roles.length) await tx.userRole.createMany({ data: roles.map((role) => ({ userId: id, role, grantedBy: req.user.id })) });
-      if (!(await tx.userRole.count({ where: { role: 'ADMIN' } }))) throw new DomainError('At least one Super Admin must remain', 409);
       await tx.session.deleteMany({ where: { userId: id } });
       await audit(tx, { actorId: req.user.id, action: 'user.roles-changed', entityType: 'user', entityId: id, metadata: { roles } });
     });
@@ -158,7 +162,7 @@ export function registerAdminPeople(app, { prisma }) {
       entry.roles.push(r.role);
       byUser.set(r.userId, entry);
     }
-    res.json({ staff: [...byUser.values()], roles: Object.entries(staffRoles).map(([id, v]) => ({ id, ...v })) });
+    res.json({ staff: [...byUser.values()], roles: Object.entries(staffRoles).filter(([id]) => ASSIGNABLE_STAFF_ROLES.includes(id)).map(([id, v]) => ({ id, ...v })) });
   });
 
   // ───────────── Business accounts ─────────────

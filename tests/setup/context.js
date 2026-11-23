@@ -7,11 +7,13 @@ import { randomUUID, createHmac } from 'node:crypto';
 import { createApp } from '../../apps/api/src/app.js';
 import { createPrisma } from '../../apps/api/src/lib/db.js';
 import { createPayments } from '../../apps/api/src/integrations/payments.js';
+import { hashPassword } from '../../apps/api/src/lib/security.js';
 import { createShipping } from '../../apps/api/src/integrations/shipping.js';
 import { seedReference, seedDemo } from '../../apps/api/prisma/seed.js';
 
 export const ORIGIN = 'http://127.0.0.1:3000';
 export const ADMIN_EMAIL = 'founder@example.test';
+export const ADMIN_PASSWORD = 'Super admin test phrase 2026';
 export const RAZORPAY = { keyId: 'rzp_test_unit', keySecret: 'unit_test_secret', webhookSecret: 'unit_webhook_secret' };
 
 let phoneCounter = 0;
@@ -35,7 +37,7 @@ export async function createContext({ demo = true, payments = 'demo', fetchImpl 
   const mails = [];
   const files = new Map();
   const config = {
-    origin: ORIGIN, production: false, demoPayments: payments === 'demo', encryptionKey: 'a'.repeat(64), bootstrapAdminEmail: ADMIN_EMAIL, trustProxy: 0,
+    origin: ORIGIN, production: false, demoPayments: payments === 'demo', encryptionKey: 'a'.repeat(64), trustProxy: 0,
   };
   const app = createApp({
     prisma, config,
@@ -67,10 +69,14 @@ export async function createContext({ demo = true, payments = 'demo', fetchImpl 
       if (res.status !== 201) throw new Error(`register failed: ${res.status} ${JSON.stringify(res.body)}`);
       return { agent, user: res.body.user, email };
     },
+    /** The Super Admin as scripts/create-superadmin.mjs creates it, signed in through /api/auth/superadmin/login. */
     async admin() {
-      const existing = await prisma.user.findUnique({ where: { email: ADMIN_EMAIL } });
-      if (existing) throw new Error('admin() can only be called once per context');
-      return ctx.register('customer', { email: ADMIN_EMAIL, name: 'Founder' });
+      if (await prisma.user.findUnique({ where: { email: ADMIN_EMAIL } })) throw new Error('admin() can only be called once per context');
+      const user = await prisma.user.create({ data: { name: 'Founder', email: ADMIN_EMAIL, passwordHash: await hashPassword(ADMIN_PASSWORD), emailVerifiedAt: new Date(), roles: { create: { role: 'ADMIN' } } } });
+      const agent = ctx.agent();
+      const res = await agent.post('/api/auth/superadmin/login').send({ email: ADMIN_EMAIL, password: ADMIN_PASSWORD });
+      if (res.status !== 200) throw new Error(`superadmin login failed: ${res.status} ${JSON.stringify(res.body)}`);
+      return { agent, user: { ...res.body.user, id: user.id }, email: ADMIN_EMAIL };
     },
     /** Approves every pending store and organisation so tests can focus on the flow under test. */
     async approveAll() {

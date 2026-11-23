@@ -11,15 +11,36 @@ export function cookieOptions(config) {
   return { httpOnly: true, sameSite: 'lax', secure: config.production, path: '/', maxAge: SESSION_DAYS * 86_400_000 };
 }
 
+/** Super Admin sessions are shorter than everyone else's. */
+export const SUPERADMIN_SESSION_HOURS = 12;
+
+// Older builds set the cookie with Path=/api. Browsers send that one before the Path=/ cookie on /api requests,
+// so clearing it on sign-in and sign-out (and accepting any valid token below) prevents "signed in, then 401" loops.
+export const LEGACY_COOKIE_PATHS = ['/api'];
+
+/** Every ib_session value the browser sent. cookie-parser keeps only the first, which may be a stale legacy cookie. */
+export function sessionTokens(req) {
+  const header = req.headers.cookie ?? '';
+  const tokens = [];
+  for (const part of header.split(';')) {
+    const [name, ...rest] = part.trim().split('=');
+    const value = rest.join('=');
+    if (name === SESSION_COOKIE && /^[a-f0-9]{64}$/.test(value) && !tokens.includes(value)) tokens.push(value);
+  }
+  return tokens.slice(0, 4);
+}
+
 const STAFF_ORDER = ['ADMIN', 'OPERATIONS', 'FINANCE', 'SUPPORT'];
 
 /** Loads the signed-in user (if any) with staff roles and memberships. Suspended accounts are treated as signed out. */
 export function loadSession(prisma) {
   return async (req, _res, next) => {
-    const token = req.cookies?.[SESSION_COOKIE];
-    if (typeof token === 'string' && /^[a-f0-9]{64}$/.test(token)) {
-      const session = await prisma.session.findUnique({
-        where: { id: sha256(token) },
+    const tokens = sessionTokens(req);
+    if (tokens.length) {
+      const sessions = await prisma.session.findMany({
+        where: { id: { in: tokens.map(sha256) }, expiresAt: { gt: new Date() } },
+        orderBy: { createdAt: 'desc' },
+        take: 1,
         include: {
           user: {
             include: {
@@ -30,7 +51,8 @@ export function loadSession(prisma) {
           },
         },
       });
-      if (session && session.expiresAt > new Date() && session.user.status === 'ACTIVE') {
+      const session = sessions[0];
+      if (session && session.user.status === 'ACTIVE') {
         req.session = session;
         req.user = session.user;
         req.staffRoles = session.user.roles.map((r) => r.role).sort((a, b) => STAFF_ORDER.indexOf(a) - STAFF_ORDER.indexOf(b));

@@ -10,7 +10,8 @@ export function useSession() {
   const query = useQuery({
     queryKey: ['me'],
     queryFn: async () => {
-      try { return (await api<{ user: User }>('/auth/me')).user; } catch (e) { if (e instanceof ApiError && e.status === 401) return null; throw e; }
+      // /auth/session answers 200 with null when signed out, so a normal page load logs no errors.
+      return (await api<{ user: User | null }>('/auth/session')).user;
     },
     staleTime: 60_000,
   });

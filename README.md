@@ -21,8 +21,10 @@ npm run db:migrate && npm run db:seed:demo
 npm run dev                     # API on :4000, web on http://127.0.0.1:3000
 ```
 
-Set `BOOTSTRAP_ADMIN_EMAIL` in `.env` and register with that email to become the local Super Admin, or run
-`node scripts/grant-admin.mjs you@example.com`. With no Razorpay keys and `DEMO_PAYMENTS=true`, checkout offers a clearly
+**Super Admin:** set `SUPERADMIN_EMAIL` and `SUPERADMIN_PASSWORD` in `.env`, run `npm run superadmin`, then sign in at
+`/superadmin/login`. Registration never creates an admin, the console can't grant the Super Admin role, and the Super
+Admin can't sign in on the normal `/login` page. Other staff (Operations, Finance, Support) are granted by the Super Admin
+under People and sign in at `/login?portal=staff`. With no Razorpay keys and `DEMO_PAYMENTS=true`, checkout offers a clearly
 labelled payment simulation; no money moves and demo orders are excluded from GMV.
 
 ## Commands

@@ -14,7 +14,7 @@ const COLUMNS = [
 
 export function Footer() {
   const pathname = usePathname();
-  if (/^\/(admin|seller|business)(\/|$)/.test(pathname)) return null;
+  if (/^\/(admin|superadmin|seller|business)(\/|$)/.test(pathname)) return null;
   return (
     <footer className="surface-emerald mt-16 pb-20 md:pb-0">
       <div className="container-page grid grid-cols-2 md:grid-cols-4 gap-4 py-8 border-b border-white/10">
@@ -38,7 +38,7 @@ export function Footer() {
             <div key={c.title}>
               <p className="font-semibold text-gold-light mb-3">{c.title}</p>
               <ul className="grid gap-2 text-[14.5px] text-white/75">
-                {c.links.map(([l, h]) => <li key={h}><Link href={h} className="hover:text-white">{l}</Link></li>)}
+                {c.links.map(([l, h]) => <li key={`${h}:${l}`}><Link href={h} className="hover:text-white">{l}</Link></li>)}
               </ul>
             </div>
           ))}

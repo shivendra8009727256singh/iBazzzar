@@ -9,7 +9,9 @@ import { audit } from '../lib/audit.js';
 import { slugify } from '../lib/http.js';
 import { transaction } from '../lib/db.js';
 import { emailHtml } from '../integrations/mailer.js';
-import { SESSION_COOKIE, SESSION_DAYS, cookieOptions, publicUser, requireAuth } from '../http/middleware.js';
+import {
+  SESSION_COOKIE, SESSION_DAYS, SUPERADMIN_SESSION_HOURS, LEGACY_COOKIE_PATHS, cookieOptions, publicUser, requireAuth, sessionTokens,
+} from '../http/middleware.js';
 
 export const MAX_FAILED_LOGINS = 5;
 export const LOCK_MINUTES = 15;
@@ -62,13 +64,44 @@ export async function createStore(tx, userId, profile) {
 }
 
 export function registerAuth(app, { prisma, config, mailer, limits }) {
-  const startSession = async (req, res, userId) => {
-    const token = randomToken();
-    await prisma.session.create({
-      data: { id: sha256(token), userId, expiresAt: new Date(Date.now() + SESSION_DAYS * 86_400_000), userAgent: req.get('user-agent')?.slice(0, 300) ?? null, ip: req.ip },
-    });
-    res.cookie(SESSION_COOKIE, token, cookieOptions(config));
+  const clearLegacyCookies = (res) => {
+    for (const path of LEGACY_COOKIE_PATHS) res.clearCookie(SESSION_COOKIE, { httpOnly: true, sameSite: 'lax', secure: config.production, path });
   };
+  const startSession = async (req, res, userId, { hours } = {}) => {
+    const token = randomToken();
+    const ms = hours ? hours * 3_600_000 : SESSION_DAYS * 86_400_000;
+    // Any session this browser already had is replaced, so a stale cookie can never shadow the new one.
+    const previous = sessionTokens(req);
+    if (previous.length) await prisma.session.deleteMany({ where: { id: { in: previous.map(sha256) } } });
+    await prisma.session.create({
+      data: { id: sha256(token), userId, expiresAt: new Date(Date.now() + ms), userAgent: req.get('user-agent')?.slice(0, 300) ?? null, ip: req.ip },
+    });
+    clearLegacyCookies(res);
+    res.cookie(SESSION_COOKIE, token, { ...cookieOptions(config), maxAge: ms });
+  };
+
+  /** Shared password check with per-account lockout. Unknown emails take the same time and get the same answer. */
+  async function verifyCredentials(req, input) {
+    const user = await prisma.user.findUnique({ where: { email: input.email }, include: { roles: true } });
+    if (user?.lockedUntil && user.lockedUntil > new Date()) {
+      const until = user.lockedUntil.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' });
+      throw new DomainError(`Too many failed attempts. Try again after ${until} IST or reset your password.`, 429);
+    }
+    const valid = await verifyPassword(input.password, user?.passwordHash ?? DUMMY_HASH);
+    if (!valid || !user) {
+      if (user) {
+        const failed = user.failedLogins + 1;
+        const lock = failed >= MAX_FAILED_LOGINS;
+        await prisma.user.update({ where: { id: user.id }, data: lock ? { failedLogins: 0, lockedUntil: new Date(Date.now() + LOCK_MINUTES * 60_000) } : { failedLogins: failed } });
+        if (lock) await audit(prisma, { actorId: user.id, action: 'user.locked', entityType: 'user', entityId: user.id, ip: req.ip });
+      }
+      throw new DomainError('Email or password is incorrect', 401);
+    }
+    if (user.status === 'SUSPENDED') throw new DomainError('This account has been suspended. Please contact IBazzzar support for help.', 403);
+    if (user.failedLogins || user.lockedUntil) await prisma.user.update({ where: { id: user.id }, data: { failedLogins: 0, lockedUntil: null } });
+    return user;
+  }
+  const isSuperAdmin = (user) => user.roles.some((r) => r.role === 'ADMIN');
   const me = async (userId, session) => publicUser(await prisma.user.findUnique({ where: { id: userId }, include: userInclude }), session);
 
   async function sendVerification(user) {
@@ -96,11 +129,7 @@ export function registerAuth(app, { prisma, config, mailer, limits }) {
       const created = await tx.user.create({
         data: { name: input.name, email: input.email, phone: input.phone, passwordHash, marketingOptIn: input.marketingOptIn, termsAcceptedAt: new Date() },
       });
-      // Local bootstrap only: the configured email becomes the first Super Admin. Production uses scripts/grant-admin.mjs.
-      if (config.bootstrapAdminEmail === input.email && !(await tx.userRole.count({ where: { role: 'ADMIN' } }))) {
-        await tx.userRole.create({ data: { userId: created.id, role: 'ADMIN' } });
-        await audit(tx, { actorId: created.id, action: 'user.bootstrap-admin', entityType: 'user', entityId: created.id });
-      }
+      // Registration never grants a staff role. The Super Admin is created only by scripts/create-superadmin.mjs.
       if (input.accountType === 'business') await createOrganization(tx, created.id, input.business);
       if (input.accountType === 'seller') await createStore(tx, created.id, input.seller);
       await audit(tx, { actorId: created.id, action: `user.registered.${input.accountType}`, entityType: 'user', entityId: created.id, ip: req.ip });
@@ -112,39 +141,43 @@ export function registerAuth(app, { prisma, config, mailer, limits }) {
     res.status(201).json({ user: await me(user.id), verificationSent });
   });
 
+  /** Shoppers, business buyers, sellers and staff. The Super Admin must use the separate Super Admin sign-in. */
   app.post('/api/auth/login', limits.auth, async (req, res) => {
     const input = loginSchema.parse(req.body);
-    const user = await prisma.user.findUnique({ where: { email: input.email } });
-    if (user?.lockedUntil && user.lockedUntil > new Date()) {
-      const until = user.lockedUntil.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' });
-      throw new DomainError(`Too many failed attempts. Try again after ${until} IST or reset your password.`, 429);
+    const user = await verifyCredentials(req, input);
+    if (isSuperAdmin(user)) {
+      await audit(prisma, { actorId: user.id, action: 'superadmin.wrong-portal', entityType: 'user', entityId: user.id, ip: req.ip });
+      throw new DomainError('This account signs in from the Super Admin sign-in page.', 403);
     }
-    const valid = await verifyPassword(input.password, user?.passwordHash ?? DUMMY_HASH);
-    if (!valid || !user) {
-      // Per-account lockout complements the per-IP rate limit against distributed password guessing.
-      if (user) {
-        const failed = user.failedLogins + 1;
-        const lock = failed >= MAX_FAILED_LOGINS;
-        await prisma.user.update({ where: { id: user.id }, data: lock ? { failedLogins: 0, lockedUntil: new Date(Date.now() + LOCK_MINUTES * 60_000) } : { failedLogins: failed } });
-        if (lock) await audit(prisma, { actorId: user.id, action: 'user.locked', entityType: 'user', entityId: user.id, ip: req.ip });
-      }
-      throw new DomainError('Email or password is incorrect', 401);
-    }
-    if (user.status === 'SUSPENDED') throw new DomainError('This account has been suspended. Please contact IBazzzar support for help.', 403);
-    if (user.failedLogins || user.lockedUntil) await prisma.user.update({ where: { id: user.id }, data: { failedLogins: 0, lockedUntil: null } });
     await startSession(req, res, user.id);
     await audit(prisma, { actorId: user.id, action: 'user.signed-in', entityType: 'user', entityId: user.id, ip: req.ip });
     res.json({ user: await me(user.id) });
   });
 
+  /** Super Admin only. Other accounts get the same answer as a wrong password, so the page reveals nothing. */
+  app.post('/api/auth/superadmin/login', limits.superadmin, async (req, res) => {
+    const input = loginSchema.parse(req.body);
+    const user = await verifyCredentials(req, input);
+    if (!isSuperAdmin(user)) {
+      await audit(prisma, { actorId: user.id, action: 'superadmin.denied', entityType: 'user', entityId: user.id, ip: req.ip });
+      throw new DomainError('Email or password is incorrect', 401);
+    }
+    await startSession(req, res, user.id, { hours: SUPERADMIN_SESSION_HOURS });
+    await audit(prisma, { actorId: user.id, action: 'superadmin.signed-in', entityType: 'user', entityId: user.id, ip: req.ip });
+    res.json({ user: await me(user.id) });
+  });
+
   app.post('/api/auth/logout', async (req, res) => {
-    const token = req.cookies?.[SESSION_COOKIE];
-    if (typeof token === 'string') await prisma.session.deleteMany({ where: { id: sha256(token) } });
+    const tokens = sessionTokens(req);
+    if (tokens.length) await prisma.session.deleteMany({ where: { id: { in: tokens.map(sha256) } } });
     res.clearCookie(SESSION_COOKIE, { ...cookieOptions(config), maxAge: undefined });
+    clearLegacyCookies(res);
     res.json({ ok: true });
   });
 
   app.get('/api/auth/me', requireAuth, async (req, res) => res.json({ user: publicUser(req.user, req.session) }));
+  // Same as /me but answers 200 with null when signed out, so a signed-out page load logs no errors in the browser.
+  app.get('/api/auth/session', async (req, res) => res.json({ user: req.user ? publicUser(req.user, req.session) : null }));
 
   /** Switch which business account or store this session acts for. Membership is re-checked on every request. */
   app.post('/api/auth/context', requireAuth, async (req, res) => {
@@ -190,8 +223,9 @@ export function registerAuth(app, { prisma, config, mailer, limits }) {
   app.post('/api/auth/password-reset/request', limits.reset, async (req, res) => {
     const { email } = z.object({ email: z.email().toLowerCase() }).parse(req.body);
     if (!mailer.configured) throw new DomainError('Password reset by email isn’t available yet. Please contact support.', 503);
-    const user = await prisma.user.findUnique({ where: { email } });
-    if (user && user.status === 'ACTIVE') {
+    const user = await prisma.user.findUnique({ where: { email }, include: { roles: true } });
+    // The Super Admin password is managed only with scripts/create-superadmin.mjs, never by an emailed link.
+    if (user && user.status === 'ACTIVE' && !user.roles.some((r) => r.role === 'ADMIN')) {
       const token = randomToken();
       await prisma.$transaction([
         prisma.passwordResetToken.deleteMany({ where: { userId: user.id } }),

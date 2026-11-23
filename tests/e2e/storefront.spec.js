@@ -106,22 +106,62 @@ test('a new shopper registers, pays online in demo mode and gets a confirmed ord
   await expect(page.getByText('Confirmed').first()).toBeVisible();
 });
 
-test('the bootstrap admin reaches the console and customers cannot', async ({ page }) => {
+test('the Super Admin signs in only on its own page; a stale legacy cookie does not break sign-in', async ({ page, context }) => {
+  const email = process.env.SUPERADMIN_EMAIL;
+  const password = process.env.SUPERADMIN_PASSWORD;
   await page.goto('/admin');
   await expect(page).toHaveURL(/\/login/);
-  await page.goto('/register');
-  await page.getByLabel('Full name').fill('E2E Admin');
-  await page.getByLabel('Mobile number').fill(phone());
-  await page.getByRole('textbox', { name: 'Email', exact: true }).fill('e2e-admin@example.test');
-  await page.locator('input[autocomplete="new-password"]').first().fill('Admin console phrase 77');
-  await page.getByLabel('Confirm password').fill('Admin console phrase 77');
-  await page.getByRole('checkbox', { name: /I accept the Terms of Use/ }).check();
-  await page.getByRole('button', { name: 'Create account' }).click();
-  await expect(page).toHaveURL(/\/account/);
-  await page.goto('/admin');
+  // An older build left a Path=/api cookie in many browsers; it used to shadow the new session.
+  await context.addCookies([{ name: 'ib_session', value: 'c'.repeat(64), domain: '127.0.0.1', path: '/api' }]);
+  // The normal sign-in refuses the Super Admin.
+  await page.goto('/login');
+  await page.getByRole('textbox', { name: 'Email', exact: true }).fill(email);
+  await page.locator('input[autocomplete="current-password"]').fill(password);
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page.getByText(/Super Admin sign-in page/)).toBeVisible();
+  // The Super Admin page works.
+  await page.goto('/superadmin/login');
+  await expect(page.getByRole('heading', { name: 'Super Admin sign in' })).toBeVisible();
+  await page.getByRole('textbox', { name: 'Email', exact: true }).fill(email);
+  await page.locator('input[autocomplete="current-password"]').fill(password);
+  await page.getByRole('button', { name: /Sign in to the console/ }).click();
+  await expect(page).toHaveURL(/\/admin$/);
   await expect(page.getByRole('heading', { name: 'Marketplace overview' })).toBeVisible();
-  for (const [path, heading] of [['orders', 'Orders'], ['moderation', 'Moderation'], ['finance', 'Commissions & settlements'], ['cms', 'Homepage & content'], ['settings', 'Platform settings'], ['audit', 'Audit log']]) {
+  for (const path of ['/api/auth/me', '/api/notifications', '/api/admin/me']) {
+    expect((await page.request.get(path)).status(), path).toBe(200);
+  }
+  // State-changing API calls need the site's Origin (CSRF protection); browsers send it automatically.
+  const origin = new URL(page.url()).origin;
+  expect((await page.request.post('/api/cart/merge', { data: { items: [], mode: 'RETAIL' }, headers: { Origin: origin } })).status()).toBe(200);
+  expect((await page.request.post('/api/cart/merge', { data: { items: [], mode: 'RETAIL' } })).status()).toBe(403);
+  for (const [path, heading] of [['orders', 'Orders'], ['moderation', 'Moderation'], ['finance', 'Commissions & settlements'], ['cms', 'Homepage & content'], ['settings', 'Platform settings'], ['audit', 'Audit log'], ['staff', 'Staff roles']]) {
     await page.goto(`/admin/${path}`);
     await expect(page.getByRole('heading', { level: 1, name: heading })).toBeVisible();
   }
+});
+
+test('a shopper signing in normally lands in their account, with no console errors', async ({ page }) => {
+  const errors = [];
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  const email = `shopper-${unique()}@example.test`;
+  await page.goto('/register');
+  await page.getByLabel('Full name').fill('Login Check');
+  await page.getByLabel('Mobile number').fill(phone());
+  await page.getByRole('textbox', { name: 'Email', exact: true }).fill(email);
+  await page.locator('input[autocomplete="new-password"]').first().fill('Quiet river morning 55');
+  await page.getByLabel('Confirm password').fill('Quiet river morning 55');
+  await page.getByRole('checkbox', { name: /I accept the Terms of Use/ }).check();
+  await page.getByRole('button', { name: 'Create account' }).click();
+  await expect(page).toHaveURL(/\/account/);
+  await page.goto('/login');
+  // Sign out behind the app's back, then reload so no page still holds the old session; count errors from here on.
+  await page.request.post('/api/auth/logout', { headers: { Origin: new URL(page.url()).origin } });
+  await page.reload();
+  errors.length = 0;
+  await page.getByRole('textbox', { name: 'Email', exact: true }).fill(email);
+  await page.locator('input[autocomplete="current-password"]').fill('Quiet river morning 55');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page).toHaveURL(/\/account$/);
+  await expect(page.getByRole('heading', { name: /Hello, Login/ })).toBeVisible();
+  expect(errors.filter((e) => !/favicon/.test(e))).toEqual([]);
 });

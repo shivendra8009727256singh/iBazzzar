@@ -41,6 +41,7 @@ export function createApp({ prisma, config, mailer, storage, payments, shipping,
   const limits = {
     global: limiter({ windowMs: 60_000, limit: 300, store: store('global') }),
     auth: limiter({ windowMs: 15 * 60_000, limit: 30, store: store('auth') }),
+    superadmin: limiter({ windowMs: 15 * 60_000, limit: 10, store: store('superadmin') }),
     reset: limiter({ windowMs: 15 * 60_000, limit: 10, store: store('reset') }),
     checkout: limiter({ windowMs: 60_000, limit: 20, store: store('checkout') }),
     write: limiter({ windowMs: 60_000, limit: 30, store: store('write') }),

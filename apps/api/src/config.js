@@ -33,7 +33,6 @@ const schema = z.object({
   S3_ACCESS_KEY_ID: z.string().optional(),
   S3_SECRET_ACCESS_KEY: z.string().optional(),
   S3_PUBLIC_URL: z.string().optional(),
-  BOOTSTRAP_ADMIN_EMAIL: z.string().optional(),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
 });
 
@@ -81,7 +80,6 @@ export function loadConfig(env = process.env) {
       driver: e.STORAGE_DRIVER, mediaDir: e.MEDIA_DIR,
       s3: { bucket: e.S3_BUCKET, region: e.S3_REGION, endpoint: e.S3_ENDPOINT, accessKeyId: e.S3_ACCESS_KEY_ID, secretAccessKey: e.S3_SECRET_ACCESS_KEY, publicUrl: e.S3_PUBLIC_URL },
     },
-    bootstrapAdminEmail: production ? undefined : e.BOOTSTRAP_ADMIN_EMAIL?.trim().toLowerCase(),
     logLevel: e.LOG_LEVEL,
   };
 }
