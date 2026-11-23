@@ -37,6 +37,7 @@ export function registerAdminPeople(app, { prisma }) {
       ...(query.status ? { status: String(query.status) } : {}),
       ...(p.createdAt ? { createdAt: p.createdAt } : {}),
       ...(query.verified === 'yes' ? { emailVerifiedAt: { not: null } } : query.verified === 'no' ? { emailVerifiedAt: null } : {}),
+      ...(query.locked === 'yes' ? { lockedUntil: { gt: new Date() } } : {}),
       ...(type === 'staff' ? { roles: { some: {} } } : {}),
       ...(type === 'seller' ? { sellerMemberships: { some: {} } } : {}),
       ...(type === 'business' ? { orgMemberships: { some: {} } } : {}),

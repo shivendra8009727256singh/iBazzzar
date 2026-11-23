@@ -91,6 +91,65 @@ export function registerAdminInsights(app, { prisma }) {
     });
   });
 
+  // ───────────── Summary cards (counts by status, new in the last 7 days, 14-day trend) ─────────────
+  const SUMMARIES = {
+    users: { cap: 'users.view', table: 'users', where: Prisma.sql`NOT demo`, statuses: {
+      ACTIVE: Prisma.sql`status = 'ACTIVE'`, UNCONFIRMED: Prisma.sql`"emailVerifiedAt" IS NULL AND status = 'ACTIVE'`, LOCKED: Prisma.sql`"lockedUntil" > now()`, SUSPENDED: Prisma.sql`status = 'SUSPENDED'`,
+    } },
+    sellers: { cap: 'users.view', table: 'seller_stores', where: Prisma.sql`TRUE`, statuses: Object.fromEntries(['PENDING', 'APPROVED', 'REJECTED', 'SUSPENDED'].map((s) => [s, Prisma.sql`status::text = ${s}`])) },
+    organizations: { cap: 'users.view', table: 'organizations', where: Prisma.sql`TRUE`, statuses: Object.fromEntries(['PENDING', 'APPROVED', 'REJECTED', 'SUSPENDED'].map((s) => [s, Prisma.sql`status::text = ${s}`])) },
+    orders: { cap: 'orders.view', table: 'orders', where: Prisma.sql`TRUE`, statuses: Object.fromEntries(['AWAITING_PAYMENT', 'CONFIRMED', 'SHIPPED', 'DELIVERED', 'CANCELLED'].map((s) => [s, s === 'SHIPPED' ? Prisma.sql`status::text IN ('SHIPPED','PARTIALLY_SHIPPED')` : Prisma.sql`status::text = ${s}`])) },
+  };
+  app.get('/api/admin/summary/:kind', requireStaff('dashboard'), async (req, res) => {
+    const s = SUMMARIES[req.params.kind];
+    if (!s) throw new DomainError('Unknown summary', 404);
+    if (!req.can(s.cap)) throw new DomainError('Your staff role doesn’t include this', 403);
+    const since = new Date(Date.now() - 14 * DAY);
+    const week = new Date(Date.now() - 7 * DAY);
+    const table = Prisma.raw(s.table);
+    const groups = { ALL: Prisma.sql`TRUE`, ...s.statuses };
+    const out = {};
+    await Promise.all(Object.entries(groups).map(async ([key, cond]) => {
+      const [[totals], daily] = await Promise.all([
+        prisma.$queryRaw`SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE "createdAt" >= ${week})::int AS recent FROM ${table} WHERE ${s.where} AND ${cond}`,
+        prisma.$queryRaw`SELECT to_char(date_trunc('day', "createdAt" AT TIME ZONE 'Asia/Kolkata'), 'YYYY-MM-DD') AS day, COUNT(*)::int AS n FROM ${table} WHERE ${s.where} AND ${cond} AND "createdAt" >= ${since} GROUP BY 1`,
+      ]);
+      const byDay = new Map(daily.map((d) => [d.day, d.n]));
+      out[key] = { total: totals.total, last7: totals.recent, series: [...Array(14)].map((_, i) => byDay.get(istDate(new Date(Date.now() - (13 - i) * DAY))) ?? 0) };
+    }));
+    // People are also split by type for the tabs.
+    if (req.params.kind === 'users') {
+      const [t] = await prisma.$queryRaw`SELECT
+        COUNT(*) FILTER (WHERE NOT EXISTS (SELECT 1 FROM user_roles r WHERE r."userId" = u.id) AND NOT EXISTS (SELECT 1 FROM seller_members m WHERE m."userId" = u.id) AND NOT EXISTS (SELECT 1 FROM organization_members o WHERE o."userId" = u.id))::int AS customer,
+        COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM organization_members o WHERE o."userId" = u.id))::int AS business,
+        COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM seller_members m WHERE m."userId" = u.id))::int AS seller,
+        COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM user_roles r WHERE r."userId" = u.id))::int AS staff,
+        COUNT(*) FILTER (WHERE u."passwordHash" = 'guest$unset')::int AS guest
+        FROM users u WHERE NOT u.demo`;
+      out.types = t;
+    }
+    res.json(out);
+  });
+
+  /** What needs a staff member's attention, limited to what their role can act on. Drives the bell in the console. */
+  app.get('/api/admin/attention', async (req, res) => {
+    if (!req.user) throw new DomainError('Please sign in to continue', 401);
+    if (!req.staffRoles.length) throw new DomainError('Staff access required', 403);
+    const items = [];
+    const add = async (cap, label, href, count) => { if (req.can(cap)) { const n = await count(); if (n) items.push({ label, href, count: n }); } };
+    await Promise.all([
+      add('approvals.manage', 'seller applications', '/admin/sellers?status=PENDING', () => prisma.sellerStore.count({ where: { status: 'PENDING' } })),
+      add('approvals.manage', 'business accounts to verify', '/admin/organizations?status=PENDING', () => prisma.organization.count({ where: { status: 'PENDING' } })),
+      add('catalogue.manage', 'products to review', '/admin/moderation', () => prisma.catalogProduct.count({ where: { status: 'PENDING' } })),
+      add('returns.manage', 'return requests', '/admin/returns?status=REQUESTED', () => prisma.returnRequest.count({ where: { status: 'REQUESTED' } })),
+      add('support.manage', 'open support tickets', '/admin/support', () => prisma.supportTicket.count({ where: { status: 'OPEN' } })),
+      add('finance.manage', 'refunds to pay', '/admin/refunds?status=PENDING_PROVIDER', () => prisma.refund.count({ where: { status: 'PENDING_PROVIDER' } })),
+      add('finance.manage', 'bank transfers to match', '/admin/orders?payment=BANK_TRANSFER_PENDING', () => prisma.order.count({ where: { paymentStatus: 'BANK_TRANSFER_PENDING', status: 'AWAITING_PAYMENT' } })),
+    ]);
+    const unread = await prisma.notification.count({ where: { userId: req.user.id, read: false } });
+    res.json({ items, total: items.reduce((s, i) => s + i.count, 0), unread });
+  });
+
   // ───────────── Global search ─────────────
   app.get('/api/admin/search', requireStaff('dashboard'), async (req, res) => {
     const q = z.string().trim().min(2, 'Type at least 2 characters').max(100).parse(req.query.q ?? '');

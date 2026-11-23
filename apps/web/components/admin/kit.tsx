@@ -230,7 +230,7 @@ export function DataTable<T extends { id: string }>({
       <div className="flex flex-wrap items-center gap-2 mb-3">
         {search && <DebouncedSearch value={get('q')} onChange={(v) => set({ q: v })} placeholder={search} />}
         {filters.map((f) => (
-          <select key={f.key} aria-label={f.label} className={cn('input min-h-[40px] py-1 w-auto pr-8', get(f.key) && 'border-forest text-forest font-semibold')} value={get(f.key)} onChange={(e) => set({ [f.key]: e.target.value })}>
+          <select key={f.key} aria-label={f.label} className={cn('input min-h-[40px] py-1 pl-3 w-auto max-w-[190px] text-[14px]', get(f.key) && 'border-forest text-forest font-semibold')} value={get(f.key)} onChange={(e) => set({ [f.key]: e.target.value })}>
             <option value="">{f.label}: all</option>
             {f.options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
@@ -433,7 +433,7 @@ export function GlobalSearch() {
   useEffect(() => { const t = setTimeout(() => setTerm(q.trim()), 250); return () => clearTimeout(t); }, [q]);
   useEffect(() => {
     const close = (e: MouseEvent) => { if (!box.current?.contains(e.target as Node)) setOpen(false); };
-    const key = (e: KeyboardEvent) => { if (e.key === '/' && !(e.target as HTMLElement).closest('input,textarea,select')) { e.preventDefault(); box.current?.querySelector('input')?.focus(); } if (e.key === 'Escape') setOpen(false); };
+    const key = (e: KeyboardEvent) => { const typing = (e.target as HTMLElement).closest('input,textarea,select'); if (((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') || (e.key === '/' && !typing)) { e.preventDefault(); box.current?.querySelector('input')?.focus(); } if (e.key === 'Escape') setOpen(false); };
     document.addEventListener('mousedown', close); document.addEventListener('keydown', key);
     return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', key); };
   }, []);
@@ -449,9 +449,10 @@ export function GlobalSearch() {
     ['Coupons', r.coupons.map((c) => ({ href: `/admin/coupons?q=${c.code}`, title: c.code, meta: c.description }))],
   ].filter(([, items]) => (items as unknown[]).length) as [string, { href: string; title: string; meta: string }[]][] : [];
   return (
-    <div ref={box} className="relative w-full max-w-md">
+    <div ref={box} className="relative w-full max-w-xl">
       <Search size={16} className="absolute left-3 top-3 text-muted" aria-hidden />
-      <input aria-label="Search the console" className="input pl-9 min-h-[40px] bg-white" placeholder="Search orders, people, sellers, SKUs…  ( / )" value={q} onFocus={() => setOpen(true)} onChange={(e) => { setQ(e.target.value); setOpen(true); }} />
+      <input aria-label="Search the console" className="input pl-9 pr-16 min-h-[42px] rounded-xl bg-[#f6f8f4] border-line focus:bg-white" placeholder="Search orders, customers, sellers, SKUs…" value={q} onFocus={() => setOpen(true)} onChange={(e) => { setQ(e.target.value); setOpen(true); }} />
+      <kbd className="hidden sm:block absolute right-2.5 top-2.5 rounded-md border border-line bg-white px-1.5 py-0.5 text-[11px] font-semibold text-muted pointer-events-none">Ctrl K</kbd>
       {open && term.length >= 2 && (
         <div className="absolute z-40 mt-2 w-full card shadow-lift max-h-[70vh] overflow-y-auto p-2">
           {query.isFetching && !r && <p className="p-3 text-sm text-muted">Searching…</p>}
@@ -464,6 +465,89 @@ export function GlobalSearch() {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ───────────── Summary cards and tab pills ─────────────
+type Tone = 'green' | 'amber' | 'red' | 'violet' | 'blue' | 'slate';
+const TONES: Record<Tone, { icon: string; stroke: string; fill: string }> = {
+  green: { icon: 'bg-mint text-forest', stroke: '#2f7d52', fill: '#2f7d5222' },
+  amber: { icon: 'bg-[#fdf1d8] text-[#b7791f]', stroke: '#d68910', fill: '#d6891018' },
+  red: { icon: 'bg-danger-bg text-danger', stroke: '#d92d20', fill: '#d92d2014' },
+  violet: { icon: 'bg-[#efeafd] text-[#6941c6]', stroke: '#7a5af8', fill: '#7a5af814' },
+  blue: { icon: 'bg-info-bg text-info', stroke: '#2e6ea6', fill: '#2e6ea618' },
+  slate: { icon: 'bg-[#eef0ec] text-muted', stroke: '#7b877f', fill: '#7b877f14' },
+};
+
+/** Small trend line for the last 14 days. Decorative: the number next to it carries the meaning. */
+export function Sparkline({ values, tone = 'green', className }: { values: number[]; tone?: Tone; className?: string }) {
+  const w = 96; const h = 34;
+  const max = Math.max(1, ...values);
+  const pts = values.map((v, i) => [(i / Math.max(1, values.length - 1)) * w, h - 3 - (v / max) * (h - 6)]);
+  const line = pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} className={cn('w-24 h-9 shrink-0', className)} aria-hidden preserveAspectRatio="none">
+      <polygon points={`0,${h} ${line} ${w},${h}`} fill={TONES[tone].fill} />
+      <polyline points={line} fill="none" stroke={TONES[tone].stroke} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+    </svg>
+  );
+}
+
+type Summary = Record<string, { total: number; last7: number; series: number[] }> & { types?: Record<string, number> };
+export type CardDef = { key: string; label: string; icon: React.ComponentType<{ size?: number }>; tone: Tone; params: Record<string, string | null> };
+
+const matches = (params: Record<string, string | null>, get: (k: string) => string) => Object.entries(params).every(([k, v]) => (get(k) || null) === (v || null));
+
+export function useSummary(kind: string) {
+  return useQuery({ queryKey: ['admin', 'summary', kind], queryFn: () => api<Summary>(`/admin/summary/${kind}`), staleTime: 30_000 });
+}
+
+/** Status cards that double as filters: click one to filter the table below; the active one is outlined. */
+export function SummaryCards({ kind, cards }: { kind: string; cards: CardDef[] }) {
+  const { get, set } = useUrlState();
+  const { data } = useSummary(kind);
+  return (
+    <div className="grid gap-3 grid-cols-2 md:grid-cols-[repeat(auto-fit,minmax(185px,1fr))] mb-5">
+      {cards.map((c) => {
+        const s = data?.[c.key];
+        const active = matches(c.params, get);
+        return (
+          <button key={c.key} type="button" onClick={() => set(c.params)} aria-pressed={active}
+            className={cn('text-left rounded-2xl border bg-white p-4 transition hover:shadow-card flex flex-col gap-2 min-w-0', active ? 'border-forest ring-1 ring-forest/30' : 'border-line')}>
+            <span className="flex items-center gap-3 min-w-0">
+              <span className={cn('size-11 rounded-full grid place-items-center shrink-0', TONES[c.tone].icon)}><c.icon size={19} /></span>
+              <span className="min-w-0">
+                <span className="block text-[13.5px] font-semibold text-ink truncate">{c.label}</span>
+                <span className="block text-2xl font-bold tabular-nums leading-tight">{s ? s.total.toLocaleString('en-IN') : '—'}</span>
+              </span>
+            </span>
+            <span className="flex items-end justify-between gap-2">
+              <span className="text-[11.5px] text-muted leading-snug">{s ? `${s.last7} new in last 7 days` : ' '}</span>
+              {s && <Sparkline values={s.series} tone={c.tone} className="w-20 h-8" />}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Rounded tabs with count badges, synced to the URL like the table filters. */
+export function TabPills({ items }: { items: { label: string; count?: number; params: Record<string, string | null> }[] }) {
+  const { get, set } = useUrlState();
+  return (
+    <div role="tablist" className="flex gap-1.5 overflow-x-auto pb-1 mb-3">
+      {items.map((t) => {
+        const active = matches(t.params, get);
+        return (
+          <button key={t.label} role="tab" type="button" aria-selected={active} onClick={() => set(t.params)}
+            className={cn('inline-flex items-center gap-2 rounded-full px-4 py-2 text-[14px] font-semibold whitespace-nowrap transition', active ? 'bg-forest text-white shadow-sm' : 'text-ink/80 hover:bg-mint')}>
+            {t.label}
+            {t.count != null && <span className={cn('rounded-full px-2 py-0.5 text-[11.5px] font-bold', active ? 'bg-gold-light text-deep' : 'bg-mint text-forest')}>{t.count.toLocaleString('en-IN')}</span>}
+          </button>
+        );
+      })}
     </div>
   );
 }

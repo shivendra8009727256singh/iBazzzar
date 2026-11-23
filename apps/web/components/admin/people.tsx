@@ -3,12 +3,21 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Users, Store, ClipboardCheck, Package, IndianRupee, Building2, RotateCcw, LifeBuoy, Landmark, AlertTriangle, Boxes, BarChart3, Lock } from 'lucide-react';
+import { Users, Store, ClipboardCheck, Package, IndianRupee, Building2, RotateCcw, LifeBuoy, Landmark, AlertTriangle, Boxes, BarChart3, Lock, UserCheck, MailWarning, Ban, Clock, CheckCircle2, XCircle } from 'lucide-react';
 import { api, patch, post, put } from '@/lib/api';
 import { formatDate, formatDateTime, formatMoney, label, pct, PAYMENT_TEXT, rupeesToPaise } from '@/lib/format';
 import { DailyBars, Meter } from '../charts';
 import { Alert, Badge, Button, ConfirmButton, Field, Input, Select, Stat, StatusBadge, Checkbox, Textarea } from '../ui';
-import { ActionButton, DataTable, Drawer, KV, Loadable, MiniStats, NotesPanel, Panel, Section, Table, Timeline, attempt, useAdminTable, useOpenParam, type Column, type ListResponse } from './kit';
+import { ActionButton, DataTable, Drawer, KV, Loadable, MiniStats, NotesPanel, Panel, Section, SummaryCards, TabPills, Table, Timeline, attempt, useAdminTable, useOpenParam, useSummary, type CardDef, type Column, type ListResponse } from './kit';
+
+/** Status cards shared by sellers and business accounts (both use the approval workflow). */
+const approvalCards = (allLabel: string): CardDef[] => [
+  { key: 'ALL', label: allLabel, icon: Users, tone: 'green', params: { status: null } },
+  { key: 'PENDING', label: 'Pending', icon: Clock, tone: 'amber', params: { status: 'PENDING' } },
+  { key: 'APPROVED', label: 'Approved', icon: CheckCircle2, tone: 'green', params: { status: 'APPROVED' } },
+  { key: 'REJECTED', label: 'Rejected', icon: XCircle, tone: 'red', params: { status: 'REJECTED' } },
+  { key: 'SUSPENDED', label: 'Suspended', icon: AlertTriangle, tone: 'violet', params: { status: 'SUSPENDED' } },
+];
 
 export type Can = (capability: string) => boolean;
 
@@ -80,7 +89,9 @@ type Customer360 = {
 };
 
 export function Customers({ can }: { can: Can }) {
-  const list = useAdminTable<ListResponse & { users: UserRow[] }>('/admin/users', ['type', 'status', 'verified']);
+  const list = useAdminTable<ListResponse & { users: UserRow[] }>('/admin/users', ['type', 'status', 'verified', 'locked']);
+  const summary = useSummary('users');
+  const types = summary.data?.types;
   const [open, setOpen] = useOpenParam();
   const columns: Column<UserRow>[] = [
     { key: 'name', label: 'Person', sort: 'name', always: true, render: (u) => <><p className="font-semibold">{u.name}</p><p className="text-xs text-muted">{u.email}</p></> },
@@ -93,13 +104,25 @@ export function Customers({ can }: { can: Can }) {
     { key: 'status', label: 'Status', render: (u) => <><StatusBadge status={u.status} />{u.locked && <Badge tone="warning" className="ml-1">Locked</Badge>}</> },
   ];
   return (
-    <Section title="People" description="Customers, business buyers, sellers and staff. Click a row for the full customer view.">
+    <Section title="People" description="Customers, business buyers, sellers and staff. Click a card or tab to filter; click a row for the full customer view.">
+      <SummaryCards kind="users" cards={[
+        { key: 'ALL', label: 'All people', icon: Users, tone: 'green', params: { status: null, verified: null, locked: null } },
+        { key: 'ACTIVE', label: 'Active', icon: UserCheck, tone: 'blue', params: { status: 'ACTIVE', verified: null, locked: null } },
+        { key: 'UNCONFIRMED', label: 'Email not confirmed', icon: MailWarning, tone: 'amber', params: { status: null, verified: 'no', locked: null } },
+        { key: 'LOCKED', label: 'Locked sign-in', icon: Lock, tone: 'slate', params: { status: null, verified: null, locked: 'yes' } },
+        { key: 'SUSPENDED', label: 'Suspended', icon: Ban, tone: 'red', params: { status: 'SUSPENDED', verified: null, locked: null } },
+      ]} />
+      <div className="card p-3 pb-1 mb-4">
+        <TabPills items={[
+          { label: 'Everyone', count: summary.data?.ALL?.total, params: { type: null } },
+          { label: 'Customers', count: types?.customer, params: { type: 'customer' } },
+          { label: 'Business buyers', count: types?.business, params: { type: 'business' } },
+          { label: 'Sellers', count: types?.seller, params: { type: 'seller' } },
+          { label: 'Staff', count: types?.staff, params: { type: 'staff' } },
+          { label: 'Guest checkouts', count: types?.guest, params: { type: 'guest' } },
+        ]} />
+      </div>
       <DataTable tableId="users" query={list} rows={list.data?.users} columns={columns} onOpen={(u) => setOpen(u.id)} search="Name, email or mobile" dateFilter="Joined"
-        filters={[
-          { key: 'type', label: 'Type', options: [['customer', 'Customers'], ['business', 'Business buyers'], ['seller', 'Sellers'], ['staff', 'Staff'], ['guest', 'Guest checkouts']] },
-          { key: 'status', label: 'Status', options: [['ACTIVE', 'Active'], ['SUSPENDED', 'Suspended']] },
-          { key: 'verified', label: 'Email', options: [['yes', 'Confirmed'], ['no', 'Not confirmed']] },
-        ]}
         bulk={can('users.manage') ? { endpoint: '/admin/users/bulk', actions: [{ id: 'sign-out', label: 'Sign out everywhere', confirm: 'They will need to sign in again on every device.' }, { id: 'suspend', label: 'Suspend', danger: true, reason: 'required' }, { id: 'restore', label: 'Restore', reason: 'optional' }] } : undefined} />
       {open && <CustomerDrawer id={open} can={can} onClose={() => { setOpen(null); list.refetch(); }} />}
     </Section>
@@ -238,8 +261,9 @@ export function Organizations({ can }: { can: Can }) {
   ];
   return (
     <Section title="Business accounts" description="Verify businesses before they can request quotes. Self-entered details are not treated as verified; check GSTIN/PAN against official records.">
+      <SummaryCards kind="organizations" cards={approvalCards('All businesses')} />
       <DataTable tableId="orgs" query={list} rows={list.data?.organizations} columns={columns} onOpen={(o) => setOpen(o.id)} search="Name or GSTIN" dateFilter="Applied"
-        filters={[{ key: 'status', label: 'Status', options: [['PENDING', 'Pending'], ['APPROVED', 'Approved'], ['REJECTED', 'Rejected'], ['SUSPENDED', 'Suspended']] }, { key: 'credit', label: 'Credit', options: [['yes', 'On credit terms'], ['no', 'Prepaid']] }, { key: 'gst', label: 'GST', options: [['yes', 'GST-registered'], ['no', 'Not registered']] }]}
+        filters={[{ key: 'credit', label: 'Credit', options: [['yes', 'On credit terms'], ['no', 'Prepaid']] }, { key: 'gst', label: 'GST', options: [['yes', 'GST-registered'], ['no', 'Not registered']] }]}
         bulk={can('approvals.manage') ? { endpoint: '/admin/organizations/bulk', actions: [{ id: 'approve', label: 'Approve' }, { id: 'reject', label: 'Reject', danger: true, reason: 'required' }, { id: 'suspend', label: 'Suspend', danger: true, reason: 'required' }] } : undefined} />
       {open && <OrgDrawer id={open} can={can} onClose={() => { setOpen(null); list.refetch(); }} />}
     </Section>
@@ -323,8 +347,9 @@ export function Sellers({ can }: { can: Can }) {
   ];
   return (
     <Section title="Sellers" description="Approve stores after checking identity and tax details. Finance verifies bank accounts, sets commission overrides and can hold payouts.">
+      <SummaryCards kind="sellers" cards={approvalCards('All sellers')} />
       <DataTable tableId="sellers" query={list} rows={list.data?.sellers} columns={columns} onOpen={(s) => setOpen(s.id)} search="Store, legal name or GSTIN" dateFilter="Applied"
-        filters={[{ key: 'status', label: 'Status', options: [['PENDING', 'Applications'], ['APPROVED', 'Approved'], ['SUSPENDED', 'Suspended'], ['REJECTED', 'Rejected']] }, { key: 'hold', label: 'Payouts', options: [['yes', 'On hold']] }, { key: 'gst', label: 'GST', options: [['yes', 'GST-registered'], ['no', 'Not registered']] }]}
+        filters={[{ key: 'hold', label: 'Payouts', options: [['yes', 'On hold']] }, { key: 'gst', label: 'GST', options: [['yes', 'GST-registered'], ['no', 'Not registered']] }]}
         bulk={can('approvals.manage') ? { endpoint: '/admin/sellers/bulk', actions: [{ id: 'approve', label: 'Approve' }, { id: 'reject', label: 'Reject', danger: true, reason: 'required' }, { id: 'suspend', label: 'Suspend', danger: true, reason: 'required' }] } : undefined} />
       {open && <SellerDrawer id={open} can={can} onClose={() => { setOpen(null); list.refetch(); }} />}
     </Section>

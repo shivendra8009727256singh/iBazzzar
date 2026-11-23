@@ -3,13 +3,13 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, ShoppingCart, Hourglass, PackageCheck, Truck, CircleCheckBig, XCircle } from 'lucide-react';
 import { indianStates } from '@ibazzzar/shared';
 import { api, del, patch, post } from '@/lib/api';
 import type { Order } from '@/lib/types';
 import { formatDate, formatDateTime, formatMoney, label, PAYMENT_TEXT, ORDER_STATUS_TEXT, rupeesToPaise, pct } from '@/lib/format';
 import { Alert, Badge, Button, ConfirmButton, Field, Input, Modal, Select, StatusBadge, Textarea, Checkbox } from '../ui';
-import { ActionButton, DataTable, Drawer, Loadable, MiniStats, NotesPanel, Panel, Section, Table, Timeline, attempt, useAdminTable, useOpenParam, useUrlState, type Column, type ListResponse } from './kit';
+import { ActionButton, DataTable, Drawer, Loadable, SummaryCards, MiniStats, NotesPanel, Panel, Section, Table, Timeline, attempt, useAdminTable, useOpenParam, useUrlState, type Column, type ListResponse } from './kit';
 import type { Can } from './people';
 
 const ORDER_STATUSES = ['AWAITING_PAYMENT', 'CONFIRMED', 'PARTIALLY_SHIPPED', 'SHIPPED', 'DELIVERED', 'CANCELLED'];
@@ -34,7 +34,7 @@ export function Orders({ can }: { can: Can }) {
   const [open, setOpen] = useOpenParam();
   const scoped = get('user') || get('store') || get('organization');
   const columns: Column<OrderRow>[] = [
-    { key: 'number', label: 'Order', sort: 'number', always: true, render: (o) => <><p className="font-semibold">{o.number}</p><p className="text-xs text-muted">{formatDateTime(o.createdAt)}</p></> },
+    { key: 'number', label: 'Order', sort: 'number', always: true, render: (o) => <><p className="font-semibold whitespace-nowrap">{o.number}</p><p className="text-xs text-muted">{formatDateTime(o.createdAt)}</p></> },
     { key: 'customer', label: 'Customer', render: (o) => <><p className="text-sm">{o.customer}</p><p className="text-xs text-muted">{o.organization ?? o.email}</p></> },
     { key: 'mode', label: 'Channel', render: (o) => (o.mode === 'BUSINESS' ? <Badge tone="info">B2B</Badge> : <Badge tone="neutral">B2C</Badge>) },
     { key: 'parcels', label: 'Parcels', render: (o) => <span className="text-sm">{o.parcels.map((p) => `${p.seller}: ${label(p.status).toLowerCase()}`).join('; ')}</span> },
@@ -48,6 +48,14 @@ export function Orders({ can }: { can: Can }) {
     <Section title="Orders" description="Every order and its seller parcels. Open an order to act on it: every action asks for a reason and is recorded.">
       {scoped && <Alert tone="info">Showing orders for one {get('user') ? 'customer' : get('store') ? 'seller' : 'business'}. <button className="underline font-semibold" onClick={() => set({ user: null, store: null, organization: null })}>Show all orders</button></Alert>}
       <div className="h-3" />
+      <SummaryCards kind="orders" cards={[
+        { key: 'ALL', label: 'All orders', icon: ShoppingCart, tone: 'green', params: { status: null } },
+        { key: 'AWAITING_PAYMENT', label: 'Awaiting payment', icon: Hourglass, tone: 'amber', params: { status: 'AWAITING_PAYMENT' } },
+        { key: 'CONFIRMED', label: 'To ship', icon: PackageCheck, tone: 'blue', params: { status: 'CONFIRMED' } },
+        { key: 'SHIPPED', label: 'In transit', icon: Truck, tone: 'violet', params: { status: 'SHIPPED' } },
+        { key: 'DELIVERED', label: 'Delivered', icon: CircleCheckBig, tone: 'green', params: { status: 'DELIVERED' } },
+        { key: 'CANCELLED', label: 'Cancelled', icon: XCircle, tone: 'red', params: { status: 'CANCELLED' } },
+      ]} />
       <DataTable tableId="orders" query={list} rows={list.data?.orders} columns={columns} onOpen={(o) => setOpen(o.id)} search="Order number, customer, phone or payment ID"
         filters={[
           { key: 'status', label: 'Status', options: ORDER_STATUSES.map((s) => [s, ORDER_STATUS_TEXT[s]]) },
