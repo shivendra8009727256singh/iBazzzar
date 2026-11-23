@@ -1,5 +1,9 @@
 # IBazzzar progress
 
+## 2026-11-23 (night) — realistic sample data for local development
+
+`npm run db:seed:sample` fills a **local** database with a running-shop dataset: 10 GST-registered sellers across 10 states, 49 products (76 offers, variants, specs, wholesale tiers), 90 customers, 4 business buyers (two on credit terms) and ~300 orders over the last 90 days, all placed through the real order services so GST, invoices, shipments, the seller ledger, refunds, returns, reviews and payouts are consistent. Nothing is labelled "demo", so dashboards and analytics count it. `-- --reset` also removes the old demo catalogue; `-- --remove` takes the sample data out again (every record is listed in the `sampleData` setting). It refuses to run unless `DATABASE_URL` points at this machine. All e-mail addresses are `@example.com` (never delivered) and accounts share the local password `Local-Sample-2026`. Product images are still the illustrative SVGs in `apps/web/public/products`.
+
 ## 2026-11-23 (evening) — Step A: admin console
 
 "Super Admin" is now called **Admin** everywhere: `npm run admin:create` (`scripts/create-admin.mjs`), `/admin/login`,
