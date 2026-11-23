@@ -149,7 +149,7 @@ export function Header() {
   const pathname = usePathname();
   const { count, wishlist } = useCart();
   const workspace = /^\/(admin|seller|business)(\/|$)/.test(pathname);
-  if (/^\/(admin|superadmin)(\/|$)/.test(pathname)) return null;
+  if (/^\/(admin)(\/|$)/.test(pathname)) return null;
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-line">
       {!workspace && (
@@ -207,7 +207,7 @@ export function Header() {
 export function MobileTabBar() {
   const pathname = usePathname();
   const { count } = useCart();
-  if (/^\/(admin|superadmin|checkout)/.test(pathname)) return null;
+  if (/^\/(admin|checkout)/.test(pathname)) return null;
   const tabs = [
     { href: '/', label: 'Home', icon: Home },
     { href: '/products', label: 'Shop', icon: Search },

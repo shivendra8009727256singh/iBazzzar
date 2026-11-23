@@ -1,12 +1,13 @@
 // Admin: homepage CMS, pages, banners, media library, broadcasts, reports, audit log and platform settings.
 import express from 'express';
 import { z } from 'zod';
-import { DomainError, can } from '../../../../../packages/shared/src/index.js';
+import { DomainError } from '../../../../../packages/shared/src/index.js';
 import { uuid, shippingSettingsSchema } from '../../../../../packages/validation/src/index.js';
 import { requireStaff } from '../../http/middleware.js';
 import { transaction, toPaise } from '../../lib/db.js';
 import { audit, notify } from '../../lib/audit.js';
 import { pageParams, toCsv, rupees, ilike, slugify } from '../../lib/http.js';
+import { listParams, sendList } from '../../lib/admin-list.js';
 import { processImage, MAX_IMAGE_BYTES } from '../../services/media.js';
 import { getSetting, putSetting } from '../../services/settings.js';
 
@@ -172,7 +173,7 @@ export function registerAdminPlatform(app, { prisma, storage }) {
   app.get('/api/admin/reports/:kind', requireStaff('reports.view'), async (req, res) => {
     const report = reports[req.params.kind];
     if (!report) throw new DomainError('Report not found', 404);
-    if (!can(req.staffRoles, report.cap)) throw new DomainError('Your staff role doesn’t include this report', 403);
+    if (!req.can(report.cap)) throw new DomainError('Your staff role doesn’t include this report', 403);
     const { from, to } = z.object({ from: z.iso.date().optional(), to: z.iso.date().optional() }).parse(req.query);
     const start = from ? new Date(`${from}T00:00:00+05:30`) : new Date(Date.now() - 90 * 86_400_000);
     const end = to ? new Date(new Date(`${to}T00:00:00+05:30`).getTime() + 86_400_000) : new Date(Date.now() + 60_000);
@@ -182,15 +183,22 @@ export function registerAdminPlatform(app, { prisma, storage }) {
   });
 
   app.get('/api/admin/audit', requireStaff('audit.view'), async (req, res) => {
-    const paging = pageParams(req.query, { size: 50 });
-    const q = String(req.query.q || '').trim();
-    const where = q ? { OR: [{ action: ilike(q) }, { entityId: { contains: q } }, { entityType: ilike(q) }] } : {};
+    const p = listParams(req.query, { newest: (d) => ({ createdAt: d }) });
+    const where = {
+      ...(p.q ? { OR: [{ action: ilike(p.q) }, { entityId: { contains: p.q } }, { entityType: ilike(p.q) }] } : {}),
+      ...(req.query.action ? { action: { startsWith: String(req.query.action) } } : {}),
+      ...(req.query.entityType ? { entityType: String(req.query.entityType) } : {}),
+      ...(req.query.entityId ? { entityId: String(req.query.entityId) } : {}),
+      ...(req.query.actor ? { actorId: String(req.query.actor) } : {}),
+      ...(p.createdAt ? { createdAt: p.createdAt } : {}),
+    };
     const [rows, total] = await Promise.all([
-      prisma.auditLog.findMany({ where, orderBy: { createdAt: 'desc' }, skip: paging.skip, take: paging.take }),
+      prisma.auditLog.findMany({ where, orderBy: p.orderBy, skip: p.skip, take: p.take }),
       prisma.auditLog.count({ where }),
     ]);
-    const people = new Map((await prisma.user.findMany({ where: { id: { in: rows.map((r) => r.actorId).filter((x) => /^[0-9a-f-]{36}$/.test(x ?? '')) } }, select: { id: true, name: true } })).map((u) => [u.id, u.name]));
-    res.json({ entries: rows.map((r) => ({ ...r, actor: r.actorId ? people.get(r.actorId) ?? r.actorId : 'System' })), total, page: paging.page, pages: Math.max(1, Math.ceil(total / paging.take)) });
+    const people = new Map((await prisma.user.findMany({ where: { id: { in: [...new Set(rows.map((r) => r.actorId).filter((x) => /^[0-9a-f-]{36}$/.test(x ?? '')))] } }, select: { id: true, name: true } })).map((u) => [u.id, u.name]));
+    const entries = rows.map((r) => ({ ...r, actor: r.actorId ? people.get(r.actorId) ?? r.actorId : 'System' }));
+    sendList(res, p, { key: 'entries', rows: entries, total, filename: 'audit-log', toCsvRow: (r) => ({ when: r.createdAt, actor: r.actor, action: r.action, entity: r.entityType, entity_id: r.entityId, ip: r.ip ?? '', details: JSON.stringify(r.metadata ?? {}) }) });
   });
 
   // ───────────── Settings ─────────────
@@ -206,7 +214,7 @@ export function registerAdminPlatform(app, { prisma, storage }) {
   };
   app.put('/api/admin/settings/:key', settingsCap, async (req, res) => {
     const key = z.enum(Object.keys(schemas)).parse(req.params.key);
-    if ((key === 'commission' || key === 'bank') && !can(req.staffRoles, 'finance.manage')) throw new DomainError('Only finance can change this', 403);
+    if ((key === 'commission' || key === 'bank') && !req.can('finance.manage')) throw new DomainError('Only finance can change this', 403);
     const patch = schemas[key].parse(req.body);
     const value = await putSetting(prisma, key, patch, req.user.id);
     await audit(prisma, { actorId: req.user.id, action: `settings.${key}-updated`, entityType: 'setting', entityId: key, metadata: patch });

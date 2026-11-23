@@ -8,8 +8,8 @@ import type { User } from '@/lib/types';
 import { Logo } from '@/components/logo';
 import { Alert, Button, Field, Input, useFormErrors } from '@/components/ui';
 
-/** Separate sign-in for the single Super Admin account. Other accounts are refused here, and this account is refused on /login. */
-export default function SuperAdminLoginPage() {
+/** Separate sign-in for the single Admin account. Other accounts are refused here, and this account is refused on /login. */
+export default function AdminLoginPage() {
   const router = useRouter();
   const qc = useQueryClient();
   const [email, setEmail] = useState('');
@@ -22,7 +22,7 @@ export default function SuperAdminLoginPage() {
     e.preventDefault();
     setBusy(true); errors.clear();
     try {
-      const { user } = await post<{ user: User }>('/auth/superadmin/login', { email, password });
+      const { user } = await post<{ user: User }>('/auth/admin/login', { email, password });
       qc.setQueryData(['me'], user);
       await qc.invalidateQueries();
       router.push('/admin');
@@ -37,7 +37,7 @@ export default function SuperAdminLoginPage() {
         <div className="card card-pad">
           <div className="flex items-center gap-3 mb-1">
             <span className="size-10 rounded-xl bg-emerald text-gold-light grid place-items-center"><ShieldCheck size={20} /></span>
-            <div><h1 className="text-2xl">Super Admin sign in</h1><p className="text-sm text-muted">Restricted area. Every attempt is recorded.</p></div>
+            <div><h1 className="text-2xl">Admin sign in</h1><p className="text-sm text-muted">Restricted area. Every attempt is recorded.</p></div>
           </div>
           <form onSubmit={submit} className="grid gap-4 mt-6" noValidate>
             {errors.message && <Alert>{errors.message}</Alert>}
@@ -49,7 +49,7 @@ export default function SuperAdminLoginPage() {
               </div>
             </Field>
             <Button size="lg" loading={busy}><Lock size={16} />Sign in to the console</Button>
-            <p className="text-[13px] text-muted">Sessions end after 12 hours. Five wrong passwords lock the account for 15 minutes. The password is managed with the server’s superadmin script, not by email reset.</p>
+            <p className="text-[13px] text-muted">Sessions end after 12 hours. Five wrong passwords lock the account for 15 minutes. The password is managed with the server’s admin script, not by email reset.</p>
           </form>
         </div>
       </div>

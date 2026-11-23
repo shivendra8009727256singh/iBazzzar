@@ -106,22 +106,22 @@ test('a new shopper registers, pays online in demo mode and gets a confirmed ord
   await expect(page.getByText('Confirmed').first()).toBeVisible();
 });
 
-test('the Super Admin signs in only on its own page; a stale legacy cookie does not break sign-in', async ({ page, context }) => {
-  const email = process.env.SUPERADMIN_EMAIL;
-  const password = process.env.SUPERADMIN_PASSWORD;
+test('the Admin signs in only on its own page; a stale legacy cookie does not break sign-in', async ({ page, context }) => {
+  const email = process.env.ADMIN_EMAIL;
+  const password = process.env.ADMIN_PASSWORD;
   await page.goto('/admin');
   await expect(page).toHaveURL(/\/login/);
   // An older build left a Path=/api cookie in many browsers; it used to shadow the new session.
   await context.addCookies([{ name: 'ib_session', value: 'c'.repeat(64), domain: '127.0.0.1', path: '/api' }]);
-  // The normal sign-in refuses the Super Admin.
+  // The normal sign-in refuses the Admin.
   await page.goto('/login');
   await page.getByRole('textbox', { name: 'Email', exact: true }).fill(email);
   await page.locator('input[autocomplete="current-password"]').fill(password);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(page.getByText(/Super Admin sign-in page/)).toBeVisible();
-  // The Super Admin page works.
-  await page.goto('/superadmin/login');
-  await expect(page.getByRole('heading', { name: 'Super Admin sign in' })).toBeVisible();
+  await expect(page.getByText(/Admin sign-in page/)).toBeVisible();
+  // The Admin page works.
+  await page.goto('/admin/login');
+  await expect(page.getByRole('heading', { name: 'Admin sign in' })).toBeVisible();
   await page.getByRole('textbox', { name: 'Email', exact: true }).fill(email);
   await page.locator('input[autocomplete="current-password"]').fill(password);
   await page.getByRole('button', { name: /Sign in to the console/ }).click();

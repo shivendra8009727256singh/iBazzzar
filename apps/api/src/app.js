@@ -15,6 +15,8 @@ import { registerCommunity } from './modules/community.js';
 import { registerAdminPeople } from './modules/admin/people.js';
 import { registerAdminCommerce } from './modules/admin/commerce.js';
 import { registerAdminPlatform } from './modules/admin/platform.js';
+import { registerAdminCatalog } from './modules/admin/catalog.js';
+import { registerAdminInsights } from './modules/admin/insights.js';
 
 export function createApp({ prisma, config, mailer, storage, payments, shipping, logger, redis }) {
   const app = express();
@@ -41,7 +43,7 @@ export function createApp({ prisma, config, mailer, storage, payments, shipping,
   const limits = {
     global: limiter({ windowMs: 60_000, limit: 300, store: store('global') }),
     auth: limiter({ windowMs: 15 * 60_000, limit: 30, store: store('auth') }),
-    superadmin: limiter({ windowMs: 15 * 60_000, limit: 10, store: store('superadmin') }),
+    adminLogin: limiter({ windowMs: 15 * 60_000, limit: 10, store: store('admin-login') }),
     reset: limiter({ windowMs: 15 * 60_000, limit: 10, store: store('reset') }),
     checkout: limiter({ windowMs: 60_000, limit: 20, store: store('checkout') }),
     write: limiter({ windowMs: 60_000, limit: 30, store: store('write') }),
@@ -71,7 +73,9 @@ export function createApp({ prisma, config, mailer, storage, payments, shipping,
   registerBusiness(app, ctx);
   registerSeller(app, ctx);
   registerCommunity(app, ctx);
+  registerAdminInsights(app, ctx);
   registerAdminPeople(app, ctx);
+  registerAdminCatalog(app, ctx);
   registerAdminCommerce(app, ctx);
   registerAdminPlatform(app, ctx);
 

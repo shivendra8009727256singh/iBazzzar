@@ -10,7 +10,7 @@ import { slugify } from '../lib/http.js';
 import { transaction } from '../lib/db.js';
 import { emailHtml } from '../integrations/mailer.js';
 import {
-  SESSION_COOKIE, SESSION_DAYS, SUPERADMIN_SESSION_HOURS, LEGACY_COOKIE_PATHS, cookieOptions, publicUser, requireAuth, sessionTokens,
+  SESSION_COOKIE, SESSION_DAYS, ADMIN_SESSION_HOURS, LEGACY_COOKIE_PATHS, cookieOptions, publicUser, requireAuth, sessionTokens,
 } from '../http/middleware.js';
 
 export const MAX_FAILED_LOGINS = 5;
@@ -101,7 +101,7 @@ export function registerAuth(app, { prisma, config, mailer, limits }) {
     if (user.failedLogins || user.lockedUntil) await prisma.user.update({ where: { id: user.id }, data: { failedLogins: 0, lockedUntil: null } });
     return user;
   }
-  const isSuperAdmin = (user) => user.roles.some((r) => r.role === 'ADMIN');
+  const isAdmin = (user) => user.roles.some((r) => r.role === 'ADMIN');
   const me = async (userId, session) => publicUser(await prisma.user.findUnique({ where: { id: userId }, include: userInclude }), session);
 
   async function sendVerification(user) {
@@ -129,7 +129,7 @@ export function registerAuth(app, { prisma, config, mailer, limits }) {
       const created = await tx.user.create({
         data: { name: input.name, email: input.email, phone: input.phone, passwordHash, marketingOptIn: input.marketingOptIn, termsAcceptedAt: new Date() },
       });
-      // Registration never grants a staff role. The Super Admin is created only by scripts/create-superadmin.mjs.
+      // Registration never grants a staff role. The Admin is created only by scripts/create-admin.mjs.
       if (input.accountType === 'business') await createOrganization(tx, created.id, input.business);
       if (input.accountType === 'seller') await createStore(tx, created.id, input.seller);
       await audit(tx, { actorId: created.id, action: `user.registered.${input.accountType}`, entityType: 'user', entityId: created.id, ip: req.ip });
@@ -141,29 +141,29 @@ export function registerAuth(app, { prisma, config, mailer, limits }) {
     res.status(201).json({ user: await me(user.id), verificationSent });
   });
 
-  /** Shoppers, business buyers, sellers and staff. The Super Admin must use the separate Super Admin sign-in. */
+  /** Shoppers, business buyers, sellers and staff. The Admin must use the separate Admin sign-in. */
   app.post('/api/auth/login', limits.auth, async (req, res) => {
     const input = loginSchema.parse(req.body);
     const user = await verifyCredentials(req, input);
-    if (isSuperAdmin(user)) {
-      await audit(prisma, { actorId: user.id, action: 'superadmin.wrong-portal', entityType: 'user', entityId: user.id, ip: req.ip });
-      throw new DomainError('This account signs in from the Super Admin sign-in page.', 403);
+    if (isAdmin(user)) {
+      await audit(prisma, { actorId: user.id, action: 'admin.wrong-portal', entityType: 'user', entityId: user.id, ip: req.ip });
+      throw new DomainError('This account signs in from the Admin sign-in page.', 403);
     }
     await startSession(req, res, user.id);
     await audit(prisma, { actorId: user.id, action: 'user.signed-in', entityType: 'user', entityId: user.id, ip: req.ip });
     res.json({ user: await me(user.id) });
   });
 
-  /** Super Admin only. Other accounts get the same answer as a wrong password, so the page reveals nothing. */
-  app.post('/api/auth/superadmin/login', limits.superadmin, async (req, res) => {
+  /** Admin only. Other accounts get the same answer as a wrong password, so the page reveals nothing. */
+  app.post('/api/auth/admin/login', limits.adminLogin, async (req, res) => {
     const input = loginSchema.parse(req.body);
     const user = await verifyCredentials(req, input);
-    if (!isSuperAdmin(user)) {
-      await audit(prisma, { actorId: user.id, action: 'superadmin.denied', entityType: 'user', entityId: user.id, ip: req.ip });
+    if (!isAdmin(user)) {
+      await audit(prisma, { actorId: user.id, action: 'admin.denied', entityType: 'user', entityId: user.id, ip: req.ip });
       throw new DomainError('Email or password is incorrect', 401);
     }
-    await startSession(req, res, user.id, { hours: SUPERADMIN_SESSION_HOURS });
-    await audit(prisma, { actorId: user.id, action: 'superadmin.signed-in', entityType: 'user', entityId: user.id, ip: req.ip });
+    await startSession(req, res, user.id, { hours: ADMIN_SESSION_HOURS });
+    await audit(prisma, { actorId: user.id, action: 'admin.signed-in', entityType: 'user', entityId: user.id, ip: req.ip });
     res.json({ user: await me(user.id) });
   });
 
@@ -224,7 +224,7 @@ export function registerAuth(app, { prisma, config, mailer, limits }) {
     const { email } = z.object({ email: z.email().toLowerCase() }).parse(req.body);
     if (!mailer.configured) throw new DomainError('Password reset by email isn’t available yet. Please contact support.', 503);
     const user = await prisma.user.findUnique({ where: { email }, include: { roles: true } });
-    // The Super Admin password is managed only with scripts/create-superadmin.mjs, never by an emailed link.
+    // The Admin password is managed only with scripts/create-admin.mjs, never by an emailed link.
     if (user && user.status === 'ACTIVE' && !user.roles.some((r) => r.role === 'ADMIN')) {
       const token = randomToken();
       await prisma.$transaction([

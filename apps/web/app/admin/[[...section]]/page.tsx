@@ -93,7 +93,7 @@ export default function AdminPage({ params }: { params: Promise<{ section?: stri
         <div className="mt-8 border-t border-white/10 pt-4 text-white/70 text-sm">
           <p className="font-semibold text-white truncate">{user.name}</p>
           <p className="text-xs">{user.roles.map((r) => staffRoles[r as keyof typeof staffRoles]?.label ?? r).join(', ')}</p>
-          <div className="flex gap-3 mt-3"><Link href="/" className="hover:text-white">Storefront</Link><button className="flex items-center gap-1 hover:text-white" onClick={async () => { await post('/auth/logout'); qc.clear(); router.push(user.roles.includes('ADMIN') ? '/superadmin/login' : '/login?portal=staff'); }}><LogOut size={14} />Sign out</button></div>
+          <div className="flex gap-3 mt-3"><Link href="/" className="hover:text-white">Storefront</Link><button className="flex items-center gap-1 hover:text-white" onClick={async () => { await post('/auth/logout'); qc.clear(); router.push(user.roles.includes('ADMIN') ? '/admin/login' : '/login?portal=staff'); }}><LogOut size={14} />Sign out</button></div>
         </div>
       </aside>
       {menu && <button className="fixed inset-0 z-40 bg-deep/50 lg:hidden" aria-label="Close menu" onClick={() => setMenu(false)} />}

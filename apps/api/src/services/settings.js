@@ -19,8 +19,12 @@ export async function putSetting(db, key, patch, actorId) {
   return value;
 }
 
-/** Commission for a category: its own rule if one exists, otherwise the platform default. */
-export async function commissionRateFor(db, categoryId) {
+/** Commission: the store's own rate if set, else the category's rule, else the platform default. */
+export async function commissionRateFor(db, categoryId, storeId) {
+  if (storeId) {
+    const store = await db.sellerStore.findUnique({ where: { id: storeId }, select: { commissionBps: true } });
+    if (store?.commissionBps != null) return store.commissionBps;
+  }
   if (categoryId) {
     const rule = await db.commissionRule.findUnique({ where: { categoryId } });
     if (rule) return rule.rateBps;

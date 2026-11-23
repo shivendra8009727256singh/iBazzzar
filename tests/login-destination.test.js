@@ -3,7 +3,7 @@ import { loginDestination } from '../apps/web/lib/login-destination';
 
 const shopper = { staffRole: null, stores: [], organizations: [] };
 describe('login destination', () => {
-  it('opens the Super Admin console even from the default Shopper tab', () => {
+  it('opens the Admin console even from the default Shopper tab', () => {
     expect(loginDestination({ ...shopper, staffRole: 'ADMIN' }, null, null)).toBe('/admin');
   });
   it('keeps ordinary shopper, staff, seller and business destinations', () => {

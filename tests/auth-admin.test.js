@@ -67,13 +67,13 @@ describe('Accounts and sessions', () => {
 });
 
 describe('Staff permissions', () => {
-  it('the script-created account is the Super Admin, with a short session', async () => {
+  it('the script-created account is the Admin, with a short session', async () => {
     expect((await admin.agent.get('/api/admin/me')).body.role).toBe('ADMIN');
     const session = await ctx.prisma.session.findFirst({ where: { userId: admin.user.id } });
     expect(session.expiresAt.getTime() - Date.now()).toBeLessThanOrEqual(12 * 3_600_000 + 5_000);
   });
 
-  it('registration never creates a Super Admin, not even the very first account', async () => {
+  it('registration never creates a Admin, not even the very first account', async () => {
     const fresh = await createContext({ demo: false });
     try {
       const first = await fresh.register('customer', { email: 'first@example.test' });
@@ -82,21 +82,21 @@ describe('Staff permissions', () => {
     } finally { await fresh.close(); }
   });
 
-  it('the Super Admin can only sign in on the Super Admin page', async () => {
+  it('the Admin can only sign in on the Admin page', async () => {
     const normal = await ctx.agent().post('/api/auth/login').send({ email: ADMIN_EMAIL, password: ADMIN_PASSWORD });
     expect(normal.status).toBe(403);
-    expect(normal.body.error).toMatch(/Super Admin sign-in page/);
+    expect(normal.body.error).toMatch(/Admin sign-in page/);
     expect(normal.headers['set-cookie']).toBeUndefined();
   });
 
-  it('the Super Admin page refuses every other account with a generic answer', async () => {
+  it('the Admin page refuses every other account with a generic answer', async () => {
     const shopper = await ctx.register();
-    const res = await ctx.agent().post('/api/auth/superadmin/login').send({ email: shopper.email, password: 'Correct horse battery 9' });
+    const res = await ctx.agent().post('/api/auth/admin/login').send({ email: shopper.email, password: 'Correct horse battery 9' });
     expect(res.status).toBe(401);
     expect(res.body.error).toBe('Email or password is incorrect');
   });
 
-  it('nobody can be made Super Admin from the console, and the Super Admin account is locked there', async () => {
+  it('nobody can be made Admin from the console, and the Admin account is locked there', async () => {
     const someone = await ctx.register();
     const grant = await admin.agent.put(`/api/admin/users/${someone.user.id}/roles`).send({ roles: ['ADMIN'] });
     expect(grant.status).toBe(400);
@@ -104,7 +104,7 @@ describe('Staff permissions', () => {
     expect(await ctx.prisma.userRole.count({ where: { role: 'ADMIN' } })).toBe(1);
   });
 
-  it('email password reset is not available for the Super Admin', async () => {
+  it('email password reset is not available for the Admin', async () => {
     const before = ctx.mails.length;
     const res = await ctx.agent().post('/api/auth/password-reset/request').send({ email: ADMIN_EMAIL });
     expect(res.status).toBe(200);

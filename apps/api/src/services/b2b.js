@@ -5,7 +5,7 @@ import { toPaise } from '../lib/db.js';
 import { audit, notify, notifyStoreOwners, notifyOrgApprovers } from '../lib/audit.js';
 import { nextNumber } from '../lib/sequence.js';
 import { loadListings, sellableListingWhere } from './catalog.js';
-import { createOrder } from './orders.js';
+import { createOrder, creditOutstanding } from './orders.js';
 
 export async function requireMembership(db, userId, organizationId, permission) {
   const m = organizationId && await db.organizationMember.findUnique({
@@ -215,6 +215,12 @@ export async function checkoutPurchaseOrder(tx, { member, user, poId, address, p
     if (po.paymentTerms === 'PREPAID') throw new DomainError('This quotation was agreed as prepaid', 409);
     if (!po.organization.creditApproved || TERM_DAYS[po.organization.allowedTerms] < TERM_DAYS[po.paymentTerms]) {
       throw new DomainError('Your business account isn’t approved for these payment terms. Pay online or by bank transfer.', 403);
+    }
+    // Credit is capped: unpaid credit-terms orders plus this one must stay within the limit finance set.
+    const limit = toPaise(po.organization.creditLimitPaise);
+    const outstanding = await creditOutstanding(tx, po.organizationId);
+    if (outstanding + toPaise(po.totalPaise) > limit) {
+      throw new DomainError(`This order would exceed your credit limit of ${money(limit)} (${money(outstanding)} already outstanding). Pay online or by bank transfer.`, 409);
     }
   }
 

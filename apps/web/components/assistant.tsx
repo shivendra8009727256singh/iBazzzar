@@ -20,7 +20,7 @@ export function Assistant() {
   const [q, setQ] = useState('');
   const path = usePathname();
   const router = useRouter();
-  if (/^\/(admin|superadmin|checkout)/.test(path)) return null;
+  if (/^\/(admin|checkout)/.test(path)) return null;
   return (
     <div className="fixed right-4 bottom-20 md:bottom-6 z-40">
       {open && (

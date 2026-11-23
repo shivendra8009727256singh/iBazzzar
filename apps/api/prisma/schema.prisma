@@ -366,6 +366,8 @@ model Organization {
   status         ApprovalStatus @default(PENDING)
   creditApproved Boolean        @default(false)
   allowedTerms   PaymentTerms   @default(PREPAID)
+  /// Maximum unpaid credit-terms balance. Zero means no credit, whatever the terms say.
+  creditLimitPaise Decimal      @default(0) @db.Decimal(14, 0)
   demo           Boolean        @default(false)
   createdAt      DateTime       @default(now()) @db.Timestamptz(3)
   updatedAt      DateTime       @updatedAt @db.Timestamptz(3)
@@ -456,6 +458,10 @@ model SellerStore {
   primaryCategoryId String?      @db.Uuid
   status          ApprovalStatus @default(PENDING)
   codEnabled      Boolean        @default(true)
+  /// Store-specific commission (basis points); overrides category and platform rates when set.
+  commissionBps   Int?
+  payoutHold      Boolean        @default(false)
+  payoutHoldReason String?
   handlingDays    Int            @default(2)
   termsAcceptedAt DateTime       @db.Timestamptz(3)
   demo            Boolean        @default(false)
@@ -1545,6 +1551,20 @@ model Setting {
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
   @@map("settings")
+}
+
+/// Internal staff notes on any record (order, user, store, organisation, product). Never shown to customers or sellers.
+model AdminNote {
+  id         String   @id @default(uuid()) @db.Uuid
+  entityType String
+  entityId   String
+  authorId   String   @db.Uuid
+  authorName String
+  body       String
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([entityType, entityId, createdAt])
+  @@map("admin_notes")
 }
 
 model NewsletterSubscription {

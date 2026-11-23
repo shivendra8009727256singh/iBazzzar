@@ -36,8 +36,8 @@ script (it protects seller bank account numbers).
 3. `npm run db:migrate` (or `docker run … npx prisma migrate deploy --config apps/api/prisma.config.js`).
 4. First release only: `npm run db:seed` (reference data — tax classes, categories, policy pages). Do **not** pass `--demo` in production.
 5. Deploy API, worker, then web. Check `GET /api/health` returns `database: ok`.
-6. Super Admin: set `SUPERADMIN_EMAIL` / `SUPERADMIN_PASSWORD` (16+ random characters) in the server's secret store and run
-   `npm run superadmin` once (re-run it to rotate the password). Sign in at `/superadmin/login` (12-hour sessions). Only one
+6. Admin: set `ADMIN_EMAIL` / `ADMIN_PASSWORD` (16+ random characters) in the server's secret store and run
+   `npm run admin:create` once (re-run it to rotate the password). Sign in at `/admin/login` (12-hour sessions). Only one
    account ever holds the role; the script removes it from any other account.
 
 Rollback: redeploy the previous image. Migrations are additive; if one must be undone, restore the backup taken in step 2.

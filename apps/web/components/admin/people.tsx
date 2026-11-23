@@ -106,7 +106,7 @@ function UserPanel({ id, onClose, canManage, canStaff }: { id: string; onClose: 
               {data.user.locked && <Button size="sm" variant="outline" onClick={async () => { await post(`/admin/users/${id}/unlock`); refetch(); }}>Unlock sign-in</Button>}
             </div>
           )}
-          {data.user.roles.includes('ADMIN') && <Alert tone="info">This is the Super Admin account. Its role, password and status are managed only with the server’s superadmin script.</Alert>}
+          {data.user.roles.includes('ADMIN') && <Alert tone="info">This is the Admin account. Its role, password and status are managed only with the server’s admin script.</Alert>}
           {canStaff && !data.user.roles.includes('ADMIN') && (
             <fieldset className="rounded-xl border border-line p-4"><legend className="label px-1">Staff roles</legend>
               <div className="flex flex-wrap gap-4">{['OPERATIONS', 'FINANCE', 'SUPPORT'].map((r) => <label key={r} className="flex items-center gap-2 text-sm"><input type="checkbox" className="checkbox mt-0" checked={(roles ?? data.user.roles).includes(r)} onChange={(e) => setRoles(e.target.checked ? [...(roles ?? data.user.roles), r] : (roles ?? data.user.roles).filter((x) => x !== r))} />{label(r)}</label>)}</div>
@@ -125,7 +125,7 @@ function UserPanel({ id, onClose, canManage, canStaff }: { id: string; onClose: 
 export function StaffRoles() {
   const query = useQuery({ queryKey: ['admin', 'staff'], queryFn: () => api<{ staff: { id: string; name: string; email: string; status: string; roles: string[] }[]; roles: { id: string; label: string; description: string }[] }>('/admin/staff') });
   return (
-    <Section title="Staff roles" description="Grant Operations, Finance or Support from People → Open. Nobody can be made Super Admin from the console. Role changes sign the person out.">
+    <Section title="Staff roles" description="Grant Operations, Finance or Support from People → Open. Nobody can be made Admin from the console. Role changes sign the person out.">
       <Loadable query={query}>{(d) => (
         <div className="grid gap-5">
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">{d.roles.map((r) => <div key={r.id} className="card card-pad"><p className="font-semibold">{r.label}</p><p className="text-sm text-muted mt-1">{r.description}</p></div>)}</div>

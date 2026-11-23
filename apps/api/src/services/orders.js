@@ -289,7 +289,7 @@ async function recordEarnings(tx, so) {
   const goods = so.items.reduce((s, i) => s + toPaise(i.lineTotalPaise), 0);
   const firstItem = so.items[0];
   const product = firstItem ? await tx.catalogProduct.findUnique({ where: { id: firstItem.catalogProductId }, select: { categoryId: true } }) : null;
-  const rate = await commissionRateFor(tx, product?.categoryId);
+  const rate = await commissionRateFor(tx, product?.categoryId, so.storeId);
   const fee = commissionPaise(goods, rate);
   const base = { storeId: so.storeId, orderId: so.orderId, sellerOrderId: so.id, demo };
   await tx.settlementEntry.create({ data: { ...base, kind: 'SALE', amountPaise: goods, note: `Order ${order.number}` } });
@@ -339,6 +339,44 @@ async function createRefund(tx, { order, sellerOrder, amountPaise, reason, retur
   }
   await notify(tx, order.userId, { title: 'Refund initiated', body: `A refund of ${money(amountPaise)} for order ${order.number} has been initiated.`, link: `/account/orders/${order.id}` });
   return refund;
+}
+
+/**
+ * Staff-initiated refund (goodwill, partial, or a correction) for one parcel. Never more than what is still refundable
+ * for that parcel, and only on orders where money was actually received.
+ */
+export async function staffRefund(tx, { orderId, sellerOrderId, amountPaise, reason, actorId }) {
+  const order = await lockOrder(tx, orderId);
+  if (!order) throw new DomainError('Order not found', 404);
+  const so = order.sellerOrders.find((s) => s.id === sellerOrderId);
+  if (!so) throw new DomainError('Parcel not found', 404);
+  const received = isPaidOnline(order) || ['COD_COLLECTED', 'ON_TERMS'].includes(order.paymentStatus);
+  if (!received) throw new DomainError('No payment has been received for this order yet', 409);
+  const already = await tx.refund.aggregate({ where: { orderId, storeId: so.storeId }, _sum: { amountPaise: true } });
+  const refundable = toPaise(so.totalPaise) - toPaise(already._sum.amountPaise ?? 0);
+  if (amountPaise > refundable) throw new DomainError(`At most ${money(refundable)} can still be refunded for this parcel`, 409);
+  const refund = await createRefund(tx, { order, sellerOrder: so, amountPaise, reason: `Staff refund: ${reason}`, returnId: null });
+  await history(tx, orderId, 'REFUND_CREATED', { sellerOrderId, note: `${money(amountPaise)} — ${reason}`, actorId });
+  await audit(tx, { actorId, action: 'refund.staff-created', entityType: 'order', entityId: orderId, metadata: { sellerOrderId, amountPaise, reason } });
+  return refund;
+}
+
+/** Finance records that a credit-terms (ON_TERMS) order has been paid by the business. */
+export async function recordTermsPayment(tx, orderId, { reference, actorId }) {
+  const order = await lockOrder(tx, orderId);
+  if (!order) throw new DomainError('Order not found', 404);
+  if (order.paymentStatus !== 'ON_TERMS') throw new DomainError('This order is not on credit terms', 409);
+  const updated = await tx.order.update({ where: { id: orderId }, data: { paymentStatus: 'PAID', paymentRef: reference, paymentDueAt: null } });
+  await history(tx, orderId, 'TERMS_PAID', { note: `Payment received (${reference})`, actorId });
+  await audit(tx, { actorId, action: 'payment.terms-received', entityType: 'order', entityId: orderId, metadata: { reference } });
+  await notify(tx, order.userId, { title: 'Payment received', body: `We’ve recorded payment for ${order.number}. Thank you.`, link: `/account/orders/${orderId}` });
+  return updated;
+}
+
+/** Unpaid credit-terms balance of a business account. */
+export async function creditOutstanding(tx, organizationId) {
+  const sum = await tx.order.aggregate({ where: { organizationId, paymentStatus: 'ON_TERMS', status: { not: 'CANCELLED' } }, _sum: { totalPaise: true } });
+  return toPaise(sum._sum.totalPaise ?? 0);
 }
 
 // ───────────── Returns ─────────────

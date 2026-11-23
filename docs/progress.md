@@ -1,19 +1,19 @@
 # IBazzzar progress
 
-## 2026-11-23 (later) — sign-in fix and Super Admin model
+## 2026-11-23 (later) — sign-in fix and Admin model
 
 - **Fixed:** signing in worked on the server but the browser then got 401s on `/api/auth/me`, `/api/notifications` and
   `/api/cart/merge`. Browsers that had used the old MVP still held an `ib_session` cookie with `Path=/api`; on `/api/*`
   requests it is sent before the new `Path=/` cookie and the server read only the first. The API now accepts the newest
   valid session among all `ib_session` values, clears the legacy cookie on sign-in/sign-out, and replaces any previous
   session on sign-in. Signed-out page loads use `/api/auth/session` (200 with `null`) so the console stays clean.
-- **Super Admin:** created only by `npm run superadmin` from `SUPERADMIN_EMAIL` / `SUPERADMIN_PASSWORD` in `.env`; exactly
-  one account holds the role (the script removes it from any other). Signs in only at `/superadmin/login` (normal `/login`
-  refuses it; the Super Admin page refuses everyone else with a generic error), 12-hour sessions, stricter rate limit, no
+- **Admin:** created only by `npm run admin:create` from `ADMIN_EMAIL` / `ADMIN_PASSWORD` in `.env`; exactly
+  one account holds the role (the script removes it from any other). Signs in only at `/admin/login` (normal `/login`
+  refuses it; the Admin page refuses everyone else with a generic error), 12-hour sessions, stricter rate limit, no
   email password reset. Registration never grants a role (bootstrap-by-email removed); the console can grant only
-  Operations, Finance and Support, and can't change, suspend or re-role the Super Admin. `scripts/grant-admin.mjs` removed.
+  Operations, Finance and Support, and can't change, suspend or re-role the Admin. `scripts/grant-admin.mjs` removed.
 - Verification: 93/93 API tests (9 new), lint, typecheck, build; e2e 12/12 three runs in a row, including a browser with a
-  stale `Path=/api` cookie signing in successfully, the Super Admin refused on `/login` and accepted on `/superadmin/login`,
+  stale `Path=/api` cookie signing in successfully, the Admin refused on `/login` and accepted on `/admin/login`,
   and a shopper sign-in with no console errors.
 
 ## 2026-11-23 — production rebuild
@@ -34,7 +34,7 @@ multi-seller offers or shipment records. It has been rebuilt. History is in git 
 | Sellers | Multiple stores per person and staff roles, dashboard analytics, product/variant/offer creation, price & tier edits, stock adjustments with movement history, fulfilment (pack → sandbox or own courier → tracking → delivered), cancellations with auto-refund, returns, RFQ quoting, PO confirmation, settlement ledger, payouts, encrypted bank account, reviews |
 | Admin | 26 capability-gated sections: dashboard (calculated, demo money separated), people & staff roles, business verification & credit terms, seller approval & bank verification, moderation, products, categories & tax/commission, brands, inventory, orders (incl. bank-transfer confirmation), B2B, shipping, returns, flash deals, coupons, payments & anomalies, refunds (Razorpay API or manual), settlements & payouts, homepage CMS with versioning, pages, banners, media library, broadcasts, support queue, CSV reports incl. GST, audit log, settings |
 | Web | New design system on the brand palette; every homepage section from the brief; SSR catalogue and product pages with JSON-LD; sitemap/robots; account, business, seller and admin workspaces; mobile tab bar, filter sheet, sticky buy bar; accessible labels/focus/reduced motion |
-| Ops | `npm run dev:db` (local embedded PostgreSQL), Dockerfiles, production compose, CI (lint, tests, typecheck, build, e2e, audit), deployment guide, `scripts/create-superadmin.mjs` |
+| Ops | `npm run dev:db` (local embedded PostgreSQL), Dockerfiles, production compose, CI (lint, tests, typecheck, build, e2e, audit), deployment guide, `scripts/create-admin.mjs` |
 
 ### Verified (run on 2026-11-23)
 
@@ -50,7 +50,7 @@ multi-seller offers or shipment records. It has been rebuilt. History is in git 
 Tests that matter most: 6 concurrent buyers for 3 units → exactly 3 orders; invalid webhook signature rejected; amount
 mismatch never marks paid; duplicate webhook applied once; payment after cancellation flagged, not applied; sellers can't see
 or act on other sellers' orders, listings, returns or POs; approver can't approve their own PO; credit terms refused until
-finance approves; last Super Admin can't be removed; CSV formula injection neutralised; CMS edits can't overwrite each other.
+finance approves; last Admin can't be removed; CSV formula injection neutralised; CMS edits can't overwrite each other.
 
 ### Not verified
 
@@ -74,7 +74,7 @@ finance approves; last Super Admin can't be removed; CSV formula injection neutr
 
 ### Next steps
 
-1. Seed Aiven once the CA certificate is in place; create the Super Admin with `npm run superadmin`.
+1. Seed Aiven once the CA certificate is in place; create the Admin with `npm run admin:create`.
 2. Push to a private GitHub repository so CI runs.
 3. Choose hosting and deploy a staging environment with Razorpay test keys.
 4. Commission artwork and onboard first real sellers.

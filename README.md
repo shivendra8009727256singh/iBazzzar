@@ -21,9 +21,9 @@ npm run db:migrate && npm run db:seed:demo
 npm run dev                     # API on :4000, web on http://127.0.0.1:3000
 ```
 
-**Super Admin:** set `SUPERADMIN_EMAIL` and `SUPERADMIN_PASSWORD` in `.env`, run `npm run superadmin`, then sign in at
-`/superadmin/login`. Registration never creates an admin, the console can't grant the Super Admin role, and the Super
-Admin can't sign in on the normal `/login` page. Other staff (Operations, Finance, Support) are granted by the Super Admin
+**Admin:** set `ADMIN_EMAIL` and `ADMIN_PASSWORD` in `.env`, run `npm run admin:create`, then sign in at
+`/admin/login`. Registration never creates an admin, the console can't grant the Admin role, and the
+Admin can't sign in on the normal `/login` page. Other staff (Operations, Finance, Support) are granted by the Admin
 under People and sign in at `/login?portal=staff`. With no Razorpay keys and `DEMO_PAYMENTS=true`, checkout offers a clearly
 labelled payment simulation; no money moves and demo orders are excluded from GMV.
 

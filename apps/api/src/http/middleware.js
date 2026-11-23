@@ -1,8 +1,9 @@
 // Request context and authorisation guards. Authorisation is always decided here or in services — never by the UI.
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
-import { DomainError, can, staffRoles, orgCan } from '../../../../packages/shared/src/index.js';
+import { DomainError, staffRoles, orgCan } from '../../../../packages/shared/src/index.js';
 import { sha256 } from '../lib/security.js';
+import { capabilitiesOf } from '../services/permissions.js';
 
 export const SESSION_COOKIE = 'ib_session';
 export const SESSION_DAYS = 7;
@@ -11,8 +12,8 @@ export function cookieOptions(config) {
   return { httpOnly: true, sameSite: 'lax', secure: config.production, path: '/', maxAge: SESSION_DAYS * 86_400_000 };
 }
 
-/** Super Admin sessions are shorter than everyone else's. */
-export const SUPERADMIN_SESSION_HOURS = 12;
+/** Admin sessions are shorter than everyone else's. */
+export const ADMIN_SESSION_HOURS = 12;
 
 // Older builds set the cookie with Path=/api. Browsers send that one before the Path=/ cookie on /api requests,
 // so clearing it on sign-in and sign-out (and accepting any valid token below) prevents "signed in, then 401" loops.
@@ -58,6 +59,9 @@ export function loadSession(prisma) {
         req.staffRoles = session.user.roles.map((r) => r.role).sort((a, b) => STAFF_ORDER.indexOf(a) - STAFF_ORDER.indexOf(b));
       }
     }
+    req.staffRoles ??= [];
+    req.capabilities = await capabilitiesOf(prisma, req.staffRoles);
+    req.can = (capability) => req.capabilities.includes(capability);
     next();
   };
 }
@@ -84,7 +88,7 @@ export function requireAuth(req, _res, next) {
 
 export const requireStaff = (capability) => (req, _res, next) => {
   if (!req.user) throw new DomainError('Please sign in to continue', 401);
-  if (!can(req.staffRoles, capability)) throw new DomainError('Your staff role doesn’t include this action. Ask a Super Admin if you need access.', 403);
+  if (!req.can(capability)) throw new DomainError('Your staff role doesn’t include this action. Ask the Admin if you need access.', 403);
   next();
 };
 

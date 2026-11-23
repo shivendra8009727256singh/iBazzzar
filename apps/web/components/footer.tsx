@@ -14,7 +14,7 @@ const COLUMNS = [
 
 export function Footer() {
   const pathname = usePathname();
-  if (/^\/(admin|superadmin|seller|business)(\/|$)/.test(pathname)) return null;
+  if (/^\/(admin|seller|business)(\/|$)/.test(pathname)) return null;
   return (
     <footer className="surface-emerald mt-16 pb-20 md:pb-0">
       <div className="container-page grid grid-cols-2 md:grid-cols-4 gap-4 py-8 border-b border-white/10">
