@@ -9,15 +9,16 @@
   "scripts": {
     "dev": "concurrently -k -n API,WEB \"npm run dev -w @ibazzzar/api\" \"npm run dev -w @ibazzzar/web\"",
     "build": "npm run build -w @ibazzzar/web",
-    "test": "vitest run",
+    "test": "node scripts/test.mjs",
     "typecheck": "npm run typecheck -w @ibazzzar/web",
     "lint": "eslint .",
     "db:generate": "npm run db:generate -w @ibazzzar/api",
     "db:migrate": "npm run db:migrate -w @ibazzzar/api",
-    "test:db": "node scripts/database-test.mjs",
     "test:browser": "node scripts/browser-smoke.mjs",
     "worker": "npm run start -w @ibazzzar/worker",
-    "check": "npm run lint && npm test && npm run typecheck && npm run build"
+    "check": "npm run lint && npm test && npm run typecheck && npm run build",
+    "db:seed": "npm run db:seed -w @ibazzzar/api",
+    "db:seed:demo": "npm run db:seed -w @ibazzzar/api -- --demo"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.0",
