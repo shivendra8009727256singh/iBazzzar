@@ -5,7 +5,7 @@ import { tryServerApi } from '@/lib/server-api';
 import { Empty, PageHeader } from '@/components/ui';
 
 export const metadata: Metadata = { title: 'Stores', description: 'Independent stores approved to sell on IBazzzar.' };
-export const revalidate = 300;
+export const dynamic = 'force-dynamic'; // rendered per request; API data is cached via fetch revalidate
 
 export default async function SellersPage() {
   const data = await tryServerApi<{ sellers: { id: string; slug: string; name: string; description: string; primaryCategory: string | null; products: number; createdAt: string }[] }>('/sellers', { revalidate: 300 });

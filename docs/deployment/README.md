@@ -1,51 +1,71 @@
-# Deployment guide
+# Deploying IBazzzar
 
-Status: **not deployed.** Nothing here has been run against a real host. Production deployment, DNS changes for ibazzzar.com and Razorpay live mode all need explicit owner approval.
+Nothing has been deployed. Production deployment, DNS changes and live payments need the owner's explicit approval.
 
-## What has to run
+## What runs
 
-| Component | Runtime | Notes |
+| Component | Needs | Notes |
 | --- | --- | --- |
-| Web (`apps/web`) | Node 22.12+ host that runs `next start` (or a Next.js platform) | Build with `API_ORIGIN` set: the `/api` rewrite is baked in at build time |
-| API (`apps/api`) | Persistent Node 22.12+ process | `APP_MODE=database`, `NODE_ENV=production`. Refuses to start in demo mode under production |
-| Worker (`apps/worker`) | Persistent Node process | Needs the same `DATABASE_URL` plus `REDIS_URL` |
-| PostgreSQL 15+ | Managed, UTF-8, daily backups + PITR | New dedicated database only |
-| Redis 7 | Managed | BullMQ scheduler for the stock-release job |
-| Object storage + CDN | S3-compatible | Not wired yet — required before sellers can upload product images |
+| Web (`apps/web`) | Node.js 22.12+ (24 recommended) | `next start`. Reads `API_ORIGIN` at request time. |
+| API (`apps/api`) | Node.js, PostgreSQL, optional Redis | Stateless; run 2+ instances behind the web for availability. |
+| Worker (`apps/worker`) | Node.js, PostgreSQL, Redis | Exactly one instance. Expires unpaid orders every 5 minutes. |
+| PostgreSQL | 16+, UTF-8, `pg_trgm` | Managed (Aiven, RDS, Neon, Supabase). Daily backups + point-in-time recovery. |
+| Redis | 7 | Shared rate limits and job queue. |
+| Object storage | S3-compatible | Product photos and documents (`STORAGE_DRIVER=s3`). Put a CDN in front via `S3_PUBLIC_URL`. |
+| Email | SMTP | Verification, password reset. `MAIL_PROVIDER=smtp`, `SMTP_URL`. |
 
-A basic shared cPanel plan cannot run the API and worker as persistent processes. Confirm the chosen provider supports long-running Node processes before committing.
+A basic shared/cPanel host cannot run this (it needs long-running Node processes and a worker). Suitable: a VPS/VM with
+Docker (`infra/compose.production.yaml`), or a platform such as Render/Railway/Fly.io/AWS (web + API + worker services).
 
 ## Environment
 
-See [`.env.example`](../../.env.example). Production rules:
+Copy `.env.example` to `.env` and fill every value. Production refuses to start if: `NODE_ENV=production` with
+`DEMO_PAYMENTS=true`, a missing `APP_ENCRYPTION_KEY`, `MAIL_PROVIDER=console`, a non-https `WEB_ORIGIN`, or any Razorpay key
+that is not `rzp_test_…` (live keys stay blocked until live payments are approved — remove that check deliberately then).
 
-- `WEB_ORIGIN=https://ibazzzar.com` — mutations from any other origin are rejected.
-- Keep `RAZORPAY_KEY_ID` on a `rzp_test_` key until live mode is approved. The API refuses non-test keys by design; enabling live mode is a code change that needs review.
-- Leave `BOOTSTRAP_ADMIN_EMAIL` empty. Create admins with `node scripts/grant-admin.mjs <email>` after the person registers.
-- Store secrets in the host's secret manager, never in the repository.
+Managed PostgreSQL with its own CA (Aiven): download the project CA certificate from the Aiven console and set
+`DATABASE_CA_CERT_FILE=/path/to/ca.pem`. Certificate verification is always on.
 
-## Release steps (staging first, then production)
+Secrets live in the hosting platform's secret store, never in git. Rotate `APP_ENCRYPTION_KEY` only with a re-encryption
+script (it protects seller bank account numbers).
 
-1. `npm ci && npm run lint && npm test && npm run typecheck && npm run test:db`
-2. Back up the target database (`pg_dump -Fc`) and confirm the backup restores.
-3. `npm run db:migrate` (runs `prisma migrate deploy`; additive migrations only — review any destructive SQL before it ships).
-4. `API_ORIGIN=<internal API URL> npm run build`
-5. Start or roll the API, then the worker, then the web app.
-6. Check `GET /api/health` → `{"status":"ok","mode":"database"}`.
-7. Run the browser smoke test against staging.
+## Release steps
 
-**Rollback:** redeploy the previous build. Migrations are written to be backward compatible, so the old build runs on the new schema. Restore from the pre-release backup only if data was corrupted.
+1. `npm ci && npm run check` (lint, unit/integration tests, typecheck, production build) and `npm run test:e2e`.
+2. Back up the database.
+3. `npm run db:migrate` (or `docker run … npx prisma migrate deploy --config apps/api/prisma.config.js`).
+4. First release only: `npm run db:seed` (reference data — tax classes, categories, policy pages). Do **not** pass `--demo` in production.
+5. Deploy API, worker, then web. Check `GET /api/health` returns `database: ok`.
+6. First administrator: register on the site, then `node scripts/grant-admin.mjs you@example.com`.
 
-## Payments
+Rollback: redeploy the previous image. Migrations are additive; if one must be undone, restore the backup taken in step 2.
 
-1. Create Razorpay test keys and a webhook secret; set the webhook URL to `https://<api-host>/api/payments/webhook` with the `payment.captured` event.
-2. Verify a test payment end to end: order page → Razorpay checkout → signature verification → webhook → order `CONFIRMED`.
-3. Refunds are issued in the Razorpay dashboard and recorded in Admin → Refunds with the `rfnd_` ID. Seller payouts need Razorpay Route (or similar) onboarding; until then the ledger shows amounts as pending settlement.
+## Staging
 
-## Before public launch
+Use a separate database, Redis and bucket with Razorpay test keys and `NEXT_PUBLIC_ALLOW_INDEXING` unset (pages send
+`noindex`). Point Razorpay test webhooks at `https://staging…/api/payments/webhook` with the webhook secret.
 
-- Legal review: privacy policy, terms, returns policy, seller agreement, DPDP Act 2023 obligations.
-- Email/SMS provider for verification, password reset and order notifications (currently in-app only).
-- Change `robots.ts` from disallow-all and remove `robots: {index:false}` in `app/layout.tsx`.
-- Replace demo catalogue and illustrative images with approved seller data and real product photography.
-- Error monitoring (e.g. Sentry) and log shipping for the pino JSON logs.
+## Razorpay
+
+1. Create test keys; set `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`.
+2. Add a webhook for `payment.captured`, `order.paid`, `payment.failed` → `/api/payments/webhook`; set `RAZORPAY_WEBHOOK_SECRET`.
+3. Set `DEMO_PAYMENTS=false`. Run a test payment; confirm the order turns Paid and the webhook appears under Admin → Payments.
+
+## Monitoring
+
+- `GET /api/health` for uptime checks (returns 503 if the database is unreachable).
+- API logs are JSON (pino) with request ids; ship them to your log service. Errors 5xx are logged with stack traces.
+- Watch Admin → Payments for anomalies (amount mismatch, payment after cancellation) and Admin → Refunds for pending refunds.
+
+## Go-live checklist
+
+- [ ] Legal review of Terms, Privacy, Returns, Shipping, Seller Agreement (CMS pages are marked as drafts)
+- [ ] GST registration of the marketplace operator and TCS obligations reviewed by a CA
+- [ ] Razorpay live activation and explicit approval to accept live keys
+- [ ] SMTP provider with SPF/DKIM on ibazzzar.com
+- [ ] S3 bucket + CDN, `STORAGE_DRIVER=s3`
+- [ ] Courier partner chosen (sandbox adapter replaced)
+- [ ] Real product photography from sellers; demo catalogue not seeded
+- [ ] Robotic brand artwork produced (`docs/ux/robotic-media.md`)
+- [ ] Backups and restore tested; alerting on health check
+- [ ] `NEXT_PUBLIC_ALLOW_INDEXING=true` only on launch day

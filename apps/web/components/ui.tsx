@@ -132,8 +132,10 @@ export function Spinner({ label = 'Loading' }: { label?: string }) {
   return <div className="flex items-center justify-center gap-2 py-12 text-muted" role="status"><Loader2 className="size-5 animate-spin" aria-hidden />{label}…</div>;
 }
 
-export function Pagination({ page, pages, onChange, hrefFor }: { page: number; pages: number; onChange?: (p: number) => void; hrefFor?: (p: number) => string }) {
+/** Client-side paging via onChange, or link-based paging via hrefBase (a URL without the page param) for server pages. */
+export function Pagination({ page, pages, onChange, hrefBase }: { page: number; pages: number; onChange?: (p: number) => void; hrefBase?: string }) {
   if (pages <= 1) return null;
+  const hrefFor = hrefBase ? (p: number) => `${hrefBase}${hrefBase.includes('?') ? '&' : '?'}page=${p}` : null;
   const item = (p: number, children: React.ReactNode, aria: string, disabled = false) => hrefFor && !disabled
     ? <Link href={hrefFor(p)} aria-label={aria} className="btn btn-outline btn-sm">{children}</Link>
     : <button type="button" aria-label={aria} disabled={disabled} onClick={() => onChange?.(p)} className="btn btn-outline btn-sm">{children}</button>;

@@ -115,7 +115,8 @@ export async function seedDemo(prisma) {
       await prisma.sellerListing.create({
         data: {
           storeId: store.id, variantId: variant.id, sku: `DEMO-${slug.slice(0, 12).toUpperCase()}-${v + 1}`, pricePaise, mrpPaise: mrp * 100, moq, status: 'APPROVED', demo: true,
-          tiers: { create: [{ minQty: moq, pricePaise: Math.round(pricePaise * 0.92) }, { minQty: moq * 4, pricePaise: Math.round(pricePaise * 0.84) }] },
+          // Wholesale tiers are whole rupees.
+          tiers: { create: [{ minQty: moq, pricePaise: Math.round(pricePaise * 0.92 / 100) * 100 }, { minQty: moq * 4, pricePaise: Math.round(pricePaise * 0.84 / 100) * 100 }] },
           inventory: { create: { warehouseId: warehouses.get(store.id), onHand: stock } },
         },
       });

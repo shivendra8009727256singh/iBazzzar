@@ -1,7 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { motion, useReducedMotion } from 'motion/react';
 import { Search, Scale, ShoppingCart, PackageCheck, Truck, Clock } from 'lucide-react';
 import type { Product } from '@/lib/types';
 import { ProductGrid } from './product-card';
@@ -50,29 +49,23 @@ const STAGES = [
 ];
 
 export function CommerceStory() {
-  const reduce = useReducedMotion();
   return (
     <ol className="grid gap-4 md:grid-cols-5">
       {STAGES.map((s, i) => (
-        <motion.li key={s.title} initial={reduce ? false : { opacity: 0, y: 18 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: '-60px' }} transition={{ delay: i * 0.08, duration: 0.45 }}
-          className="relative rounded-2xl border border-white/12 bg-white/[0.04] p-5">
+        <li key={s.title} style={{ animationDelay: `${i * 80}ms` }} className="relative rounded-2xl border border-white/12 bg-white/[0.04] p-5 animate-fade-up">
           <span className="text-[12px] font-bold text-gold-light tracking-widest">0{i + 1}</span>
           <s.icon className="mt-3 text-gold-light" size={26} />
           <h3 className="mt-3 text-xl text-white">{s.title}</h3>
           <p className="mt-1.5 text-[14px] text-white/70">{s.body}</p>
-        </motion.li>
+        </li>
       ))}
     </ol>
   );
 }
 
+/** Content is always rendered visible; the entrance is a CSS animation (disabled for reduced motion), never hidden until scrolled. */
 export function Reveal({ children, delay = 0, className }: { children: React.ReactNode; delay?: number; className?: string }) {
-  const reduce = useReducedMotion();
-  return (
-    <motion.div className={className} initial={reduce ? false : { opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: '-40px' }} transition={{ delay, duration: 0.45 }}>
-      {children}
-    </motion.div>
-  );
+  return <div className={`animate-fade-up ${className ?? ''}`} style={{ animationDelay: `${delay}s` }}>{children}</div>;
 }
 
 export function ShopLink({ href, children }: { href: string; children: React.ReactNode }) {

@@ -79,7 +79,7 @@ describe('Quote', () => {
     expect(low.status).toBe(409);
     expect(low.body.error).toMatch(/minimum order of 20/);
     const ok = await ctx.agent().post('/api/cart/quote').send({ items: [{ listingId: l.id, quantity: 20 }], mode: 'BUSINESS' });
-    expect(ok.body.quote.lines[0].unitPaise).toBe(Math.round(Number(l.pricePaise) * 0.92));
+    expect(ok.body.quote.lines[0].unitPaise).toBe(Math.round(Number(l.pricePaise) * 0.92 / 100) * 100);
   });
 });
 

@@ -36,7 +36,8 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
   const cat = categories.find((c) => c.slug === sp.category);
   const q = typeof sp.q === 'string' ? sp.q : '';
   const title = q ? `Results for “${q}”` : cat?.name ?? 'All products';
-  const hrefFor = (p: number) => { const n = new URLSearchParams(query); n.set('page', String(p)); return `/products?${n.toString()}`; };
+  const base = new URLSearchParams(query);
+  base.delete('page');
 
   return (
     <div className="container-page py-8">
@@ -68,7 +69,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
           {result.products.length ? (
             <>
               <ProductGrid products={result.products} />
-              <Pagination page={result.page} pages={result.pages} hrefFor={hrefFor} />
+              <Pagination page={result.page} pages={result.pages} hrefBase={`/products?${base.toString()}`} />
             </>
           ) : (
             <div className="card">

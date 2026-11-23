@@ -6,6 +6,7 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -15,7 +16,23 @@ jobs:
       - run: npm ci
       - run: npm run db:generate
       - run: npm run lint
+      # API tests start their own disposable PostgreSQL (embedded-postgres); no secrets or external database needed.
       - run: npm test
       - run: npm run typecheck
       - run: npm run build
-      - run: npm run test:db
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+        env:
+          E2E_BROWSER_CHANNEL: chromium
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-results
+          path: .local/e2e-results
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      - run: npm audit --omit=dev --audit-level=high

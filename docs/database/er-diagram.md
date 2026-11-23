@@ -1,46 +1,76 @@
-# Database model
+# Database
 
-Source of truth: [`apps/api/prisma/schema.prisma`](../../apps/api/prisma/schema.prisma). Money is stored as `NUMERIC(14,0)` paise and handled as integer paise in the domain. Order lines, fulfilments, history and price snapshots are stored on the order so later catalogue changes never rewrite what a customer bought.
+PostgreSQL 16+ (tested on 18), UTF-8, extension `pg_trgm`. Schema: `apps/api/prisma/schema.prisma` (79 tables).
+Migrations: `apps/api/prisma/migrations`. Integrity CHECK constraints: `apps/api/prisma/integrity-checks.sql`.
+
+## Core relationships
 
 ```mermaid
 erDiagram
-  User ||--o{ Session : has
-  User ||--o{ Order : places
-  User }o--o| Seller : "operates (sellerId)"
-  User }o--o| Organization : "member of (organizationId, organizationRole)"
-  Seller ||--o{ Product : lists
-  Organization ||--o{ Rfq : raises
-  Rfq ||--o{ Quotation : "receives (revisions)"
-  Quotation ||--o| PurchaseOrder : "accepted into"
-  Organization ||--o{ PurchaseOrder : owns
-  Order ||--o{ ReturnRequest : "per seller"
-  Order ||--o{ Refund : records
-  Order ||..o{ LedgerEntry : "sale / commission / reversals"
-  Order ||..o| IdempotencyKey : "deduplicates checkout"
-  Order ||..o{ PaymentIntent : "Razorpay order"
-  PaymentIntent ||..o{ PaymentEvent : "webhook dedupe"
-  Coupon ||..o{ Order : "couponCode"
-  Product ||..o{ Review : "verified, one per user"
-  User ||..o{ Address : saves
-  User ||..o{ SupportTicket : opens
-  User ||..o{ Notification : receives
+  users ||--o{ sessions : has
+  users ||--o{ user_roles : "staff roles"
+  users ||--o{ organization_members : "belongs to"
+  organizations ||--o{ organization_members : has
+  organizations ||--|| business_approval_policies : has
+  users ||--o{ seller_members : "works in"
+  seller_stores ||--o{ seller_members : has
+  seller_stores ||--o| seller_payout_accounts : "bank (encrypted)"
+  seller_stores ||--o{ warehouses : has
+
+  categories ||--o{ catalog_products : groups
+  tax_classes ||--o{ categories : "default GST"
+  brands ||--o{ catalog_products : makes
+  catalog_products ||--o{ product_variants : has
+  catalog_products ||--o{ product_media : shows
+  product_variants ||--o{ seller_listings : "offered by"
+  seller_stores ||--o{ seller_listings : sells
+  seller_listings ||--o{ price_tiers : "wholesale tiers"
+  seller_listings ||--o{ inventory_balances : "stock per warehouse"
+  seller_listings ||--o{ stock_movements : history
+  promotions ||--o{ promotion_items : includes
+
+  users ||--|| carts : owns
+  carts ||--o{ cart_items : holds
+  users ||--o{ orders : places
+  orders ||--o{ seller_orders : "split per seller"
+  seller_orders ||--o{ order_items : contains
+  order_items ||--o| inventory_reservations : holds
+  orders ||--o{ order_status_history : logs
+  seller_orders ||--o| invoices : "GST invoice"
+  seller_orders ||--o{ shipments : ships
+  shipments ||--o{ tracking_events : tracks
+  seller_orders ||--o{ returns : "returns"
+  returns ||--o{ return_items : covers
+  orders ||--o{ payment_intents : "Razorpay orders"
+  payment_intents ||--o{ payment_transactions : captures
+  orders ||--o{ refunds : "refunds"
+  seller_stores ||--o{ settlement_entries : ledger
+  seller_stores ||--o{ payout_records : payouts
+
+  organizations ||--o{ rfqs : raises
+  rfqs ||--o{ rfq_items : lists
+  rfqs ||--o{ quotation_requests : "sent to sellers"
+  quotation_requests ||--o| quotations : answered
+  quotations ||--o{ quote_revisions : revisions
+  quote_revisions ||--o{ quotation_items : lines
+  organizations ||--o{ purchase_orders : issues
+  purchase_orders ||--o| orders : "ordered as"
 ```
 
-## Key rules enforced in code
+## Status flows
 
-| Rule | Where |
+| Entity | Flow |
 | --- | --- |
-| Prices, MOQ, tiers, coupons computed server-side only | `packages/shared/src/index.js` `priceLines`, `couponDiscount` |
-| Checkout is idempotent per user + `Idempotency-Key`; stock decremented in the same transaction | `Marketplace.checkout` |
-| All mutations run under one PostgreSQL advisory transaction lock (no oversell under concurrency) | `PrismaRepository.transaction` |
-| One fulfilment per seller; transitions `PENDING → PACKED → SHIPPED → DELIVERED` (or `CANCELLED` before shipping) | `fulfillmentFlow`, `Marketplace.advanceFulfillment` |
-| Ledger entries written on delivery; return approval writes equal and opposite entries | `Marketplace.advanceFulfillment`, `#refund` |
-| Coupons are platform-funded: sellers' sales are recorded at full line value | `couponDiscount`, ledger `SALE` |
-| PO approval: OWNER or APPROVER; an APPROVER cannot approve their own request; optional auto-approval threshold | `Marketplace.decidePurchaseOrder`, `acceptQuote` |
+| Order | AWAITING_PAYMENT → CONFIRMED → PARTIALLY_SHIPPED / SHIPPED → DELIVERED; CANCELLED (unpaid, expired, or every parcel cancelled) |
+| Seller order (parcel) | PENDING → PACKED → SHIPPED → DELIVERED; PENDING/PACKED → CANCELLED |
+| Shipment | CREATED → PICKED_UP → IN_TRANSIT → OUT_FOR_DELIVERY → DELIVERED; FAILED_DELIVERY → OUT_FOR_DELIVERY / RETURNED |
+| Return | REQUESTED → APPROVED / REJECTED → RECEIVED → REFUNDED (when the refund is actually paid) |
+| Purchase order | PENDING_APPROVAL → APPROVED / REJECTED → CONFIRMED_BY_SELLER → ORDERED |
+| Listing / product | PENDING → APPROVED / REJECTED / CHANGES_REQUESTED; APPROVED ↔ PAUSED |
 
-## Status values
+## Safety rules
 
-- **Order**: `AWAITING_PAYMENT`, `CONFIRMED`, `SHIPPED`, `DELIVERED`, `CANCELLED`
-- **Payment**: `UNPAID`, `PAID` (verified Razorpay), `DEMO_SIMULATED` (demo mode only, excluded from GMV)
-- **Purchase order**: `PENDING_APPROVAL`, `APPROVED`, `REJECTED`, `CONFIRMED_BY_SELLER`
-- **Refund**: `PENDING_PROVIDER` → `PROCESSED` (only with a Razorpay `rfnd_` reference), or `DEMO_SIMULATED`
+- Never run `prisma migrate reset` or `db push` against a shared or production database.
+- Apply migrations with `npm run db:migrate` (`prisma migrate deploy`) as a release step, after a backup.
+- Tests never touch `.env` databases: each test file gets its own database cloned from a migrated template in a
+  disposable embedded PostgreSQL cluster, and the suite fails if `schema.prisma` drifts from the migrations.

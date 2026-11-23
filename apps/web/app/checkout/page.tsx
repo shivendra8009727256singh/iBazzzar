@@ -245,7 +245,8 @@ export default function CheckoutPage() {
             <section className="card card-pad" aria-labelledby="s-review">
               <h2 id="s-review" className="text-xl mb-3">Review and place order</h2>
               <p className="text-sm text-muted">By placing this order you agree to the <Link href="/pages/terms" className="link">Terms</Link> and the sellers’ <Link href="/pages/returns" className="link">return policy</Link>. Prices include GST{quote.lines.some((l) => l.taxRateBps) ? ` (${[...new Set(quote.lines.map((l) => l.taxRateBps))].filter(Boolean).map(pct).join(', ')})` : ''}; there are no other charges.</p>
-              <Button size="lg" className="w-full mt-5" loading={busy} onClick={place}>
+              {/* The total is re-quoted when the payment method changes; placing is blocked until it settles so the customer pays exactly what they see. */}
+              <Button size="lg" className="w-full mt-5" loading={busy || isFetching} disabled={isFetching} onClick={place}>
                 {method === 'COD' ? `Place order · pay ${formatMoney(quote.totalPaise)} on delivery` : method === 'BANK_TRANSFER' ? `Place order · ${formatMoney(quote.totalPaise)} by bank transfer` : `Place order and pay ${formatMoney(quote.totalPaise)}`}
               </Button>
             </section>

@@ -9,7 +9,7 @@ import { Countdown } from '@/components/home-parts';
 import { Empty, PageHeader } from '@/components/ui';
 
 export const metadata: Metadata = { title: 'Deals and offers', description: 'Scheduled flash deals and coupon offers with clear terms.' };
-export const revalidate = 60;
+export const dynamic = 'force-dynamic'; // rendered per request; API data is cached via fetch revalidate
 
 type Deals = { deals: { id: string; name: string; description: string; discountBps: number; startsAt: string; endsAt: string; live: boolean; products: Product[] }[] };
 type Offers = { offers: { code: string; description: string; kind: string; value: number; maxDiscountPaise: number | null; minOrderPaise: number; mode: string; endsAt: string }[] };

@@ -10,7 +10,7 @@ import { ProductRails, Countdown, CommerceStory, Reveal } from '@/components/hom
 import { ProductGrid } from '@/components/product-card';
 import { Stars, Badge } from '@/components/ui';
 
-export const revalidate = 60;
+export const dynamic = 'force-dynamic'; // rendered per request; API data is cached via fetch revalidate
 
 type Home = {
   rails: { trending: Product[]; bestSellers: Product[]; newArrivals: Product[]; topRated: Product[]; deals: Product[] };

@@ -1,0 +1,27 @@
+# IBazzzar web (Next.js) image. Build from the repository root:  docker build -f infra/Dockerfile.web -t ibazzzar-web .
+FROM node:24-bookworm-slim AS build
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY apps/web/package.json apps/web/
+COPY apps/api/package.json apps/api/
+COPY apps/worker/package.json apps/worker/
+COPY packages/shared/package.json packages/shared/
+COPY packages/validation/package.json packages/validation/
+RUN npm ci --workspace @ibazzzar/web --include-workspace-root --ignore-scripts
+COPY packages ./packages
+COPY apps/web ./apps/web
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN npm run build -w @ibazzzar/web
+
+FROM node:24-bookworm-slim
+ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000
+WORKDIR /app
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/package.json ./
+COPY --from=build /app/packages ./packages
+COPY --from=build /app/apps/web ./apps/web
+RUN chown -R node:node /app
+USER node
+EXPOSE 3000
+# API_ORIGIN (e.g. http://api:4000) is read at request time by apps/web/proxy.ts.
+CMD ["node", "node_modules/next/dist/bin/next", "start", "apps/web", "-H", "0.0.0.0", "-p", "3000"]

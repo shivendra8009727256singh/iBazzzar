@@ -14,11 +14,12 @@
     "lint": "eslint .",
     "db:generate": "npm run db:generate -w @ibazzzar/api",
     "db:migrate": "npm run db:migrate -w @ibazzzar/api",
-    "test:browser": "node scripts/browser-smoke.mjs",
     "worker": "npm run start -w @ibazzzar/worker",
     "check": "npm run lint && npm test && npm run typecheck && npm run build",
     "db:seed": "npm run db:seed -w @ibazzzar/api",
-    "db:seed:demo": "npm run db:seed -w @ibazzzar/api -- --demo"
+    "db:seed:demo": "npm run db:seed -w @ibazzzar/api -- --demo",
+    "dev:db": "node scripts/dev-db.mjs",
+    "test:e2e": "node scripts/e2e.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.0",

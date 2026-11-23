@@ -36,7 +36,7 @@ export default async function StorePage({ params, searchParams }: { params: Prom
         </div>
       </div>
       <h2 className="text-2xl mb-4">{data.total} product{data.total === 1 ? '' : 's'}</h2>
-      {data.products.length ? <><ProductGrid products={data.products} /><Pagination page={data.page} pages={data.pages} hrefFor={(p) => `/sellers/${slug}?page=${p}`} /></> : <div className="card"><Empty title="No products listed yet" /></div>}
+      {data.products.length ? <><ProductGrid products={data.products} /><Pagination page={data.page} pages={data.pages} hrefBase={`/sellers/${slug}`} /></> : <div className="card"><Empty title="No products listed yet" /></div>}
     </div>
   );
 }

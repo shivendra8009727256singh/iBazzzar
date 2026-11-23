@@ -1,6 +1,5 @@
 import type { NextConfig } from 'next';
 
-const API = process.env.API_ORIGIN || 'http://127.0.0.1:4000';
 const mediaHost = process.env.NEXT_PUBLIC_MEDIA_URL ? new URL(process.env.NEXT_PUBLIC_MEDIA_URL) : null;
 
 const securityHeaders = [
@@ -21,9 +20,6 @@ const config: NextConfig = {
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
     formats: ['image/avif', 'image/webp'],
     remotePatterns: mediaHost ? [{ protocol: mediaHost.protocol.replace(':', '') as 'https', hostname: mediaHost.hostname }] : [],
-  },
-  async rewrites() {
-    return [{ source: '/api/:path*', destination: `${API}/api/:path*` }];
   },
   async headers() {
     return [{ source: '/:path*', headers: securityHeaders }];

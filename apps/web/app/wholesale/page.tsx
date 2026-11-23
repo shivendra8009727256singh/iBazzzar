@@ -7,7 +7,7 @@ import { ProductGrid } from '@/components/product-card';
 import { WholesaleModeHint } from '@/components/wholesale-hint';
 
 export const metadata: Metadata = { title: 'Wholesale & business buying', description: 'MOQ pricing, quotations, purchase orders with approvals and GST invoices for Indian businesses.' };
-export const revalidate = 120;
+export const dynamic = 'force-dynamic'; // rendered per request; API data is cached via fetch revalidate
 
 const STEPS = [
   { icon: Scale, title: 'Compare bulk prices', body: 'Wholesale tiers drop the unit price as quantity grows. Switch to Business mode to see them everywhere.' },

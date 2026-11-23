@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { Store, Boxes, ClipboardList, Wallet, BarChart3, Users, ShieldCheck, ArrowRight } from 'lucide-react';
 import { tryServerApi } from '@/lib/server-api';
 
+export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Sell on IBazzzar', description: 'Open a store and sell retail and wholesale to customers and businesses across India.' };
 
 export default async function SellPage() {
