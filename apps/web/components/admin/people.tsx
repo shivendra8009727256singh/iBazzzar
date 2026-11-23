@@ -1,19 +1,20 @@
 'use client';
 import { useState } from 'react';
-import Image from 'next/image';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Users, Store, ClipboardCheck, Package, IndianRupee, Building2, RotateCcw, LifeBuoy, Landmark, AlertTriangle } from 'lucide-react';
+import { Users, Store, ClipboardCheck, Package, IndianRupee, Building2, RotateCcw, LifeBuoy, Landmark, AlertTriangle, Boxes, BarChart3, Lock } from 'lucide-react';
 import { api, patch, post, put } from '@/lib/api';
-import { formatDate, formatDateTime, formatMoney, label, pct } from '@/lib/format';
+import { formatDate, formatDateTime, formatMoney, label, pct, PAYMENT_TEXT, rupeesToPaise } from '@/lib/format';
 import { DailyBars, Meter } from '../charts';
-import { Alert, Badge, Button, ConfirmButton, Field, Input, Modal, Select, Stat, StatusBadge, Textarea, Checkbox } from '../ui';
-import { Loadable, Pager, SearchInput, Section, Table, useAdminList } from './kit';
+import { Alert, Badge, Button, ConfirmButton, Field, Input, Select, Stat, StatusBadge, Checkbox, Textarea } from '../ui';
+import { ActionButton, DataTable, Drawer, KV, Loadable, MiniStats, NotesPanel, Panel, Section, Table, Timeline, attempt, useAdminTable, useOpenParam, type Column, type ListResponse } from './kit';
+
+export type Can = (capability: string) => boolean;
 
 // ───────────── Overview ─────────────
 type Dashboard = {
-  metrics: { orders: number; awaitingPayment: number; toShip: number; customers: number; activeSellers: number; activeRfqs: number; paidGmvPaise: number | null; averageOrderPaise: number | null; platformRevenuePaise: number | null; demoGmvPaise: number | null; refundsPendingPaise: number | null; refundsPending: number };
+  metrics: { orders: number; awaitingPayment: number; toShip: number; customers: number; activeSellers: number; activeRfqs: number; lowStock: number; paidGmvPaise: number | null; averageOrderPaise: number | null; platformRevenuePaise: number | null; demoGmvPaise: number | null; refundsPendingPaise: number | null; refundsPending: number };
   queues: { sellers: number; products: number; offers: number; organizations: number; returns: number; tickets: number; bankTransfers: number };
   series: { date: string; orders: number; paidGmvPaise: number | null }[];
   statusMix: { value: string; count: number }[];
@@ -21,15 +22,16 @@ type Dashboard = {
   topSellers: { id: string; name: string; grossPaise: number | null }[];
 };
 
-export function Overview() {
+export function Overview({ can }: { can: Can }) {
   const query = useQuery({ queryKey: ['admin', 'dashboard'], queryFn: () => api<Dashboard>('/admin/dashboard'), refetchInterval: 60_000 });
   return (
-    <Section title="Marketplace overview" description="Every figure is calculated from stored records. Demo-simulated payments are reported separately and never counted as GMV.">
+    <Section title="Marketplace overview" description="Every figure is calculated from stored records. Demo-simulated payments are reported separately and never counted as GMV." actions={can('reports.view') && <Link href="/admin/analytics" className="btn btn-outline btn-sm"><BarChart3 size={15} />Open analytics</Link>}>
       <Loadable query={query}>{(d) => {
         const queue = [
-          [d.queues.sellers, 'seller applications', 'sellers', Store], [d.queues.products, 'new products to review', 'moderation', ClipboardCheck],
-          [d.queues.offers, 'new offers to review', 'moderation', ClipboardCheck], [d.queues.organizations, 'business accounts to verify', 'organizations', Building2],
-          [d.queues.returns, 'return requests', 'returns', RotateCcw], [d.queues.tickets, 'open support tickets', 'support', LifeBuoy], [d.queues.bankTransfers, 'bank transfers to match', 'orders', Landmark],
+          [d.queues.sellers, 'seller applications', 'sellers?status=PENDING', Store], [d.queues.products, 'new products to review', 'moderation', ClipboardCheck],
+          [d.queues.offers, 'new offers to review', 'moderation', ClipboardCheck], [d.queues.organizations, 'business accounts to verify', 'organizations?status=PENDING', Building2],
+          [d.queues.returns, 'return requests', 'returns?status=REQUESTED', RotateCcw], [d.queues.tickets, 'open support tickets', 'support', LifeBuoy],
+          [d.queues.bankTransfers, 'bank transfers to match', 'orders?payment=BANK_TRANSFER_PENDING', Landmark], [d.metrics.lowStock, 'offers low on stock', 'inventory', Boxes],
         ].filter(([n]) => (n as number) > 0) as [number, string, string, typeof Store][];
         return (
           <div className="grid gap-6">
@@ -43,19 +45,19 @@ export function Overview() {
             <div className="grid gap-6 xl:grid-cols-[1.6fr_1fr]">
               <section className="card card-pad"><DailyBars data={d.series} value={(x: { orders: number }) => x.orders} format={(n) => String(n)} label="Orders per day" /></section>
               <section className="card card-pad">
-                <h2 className="text-lg mb-3">Review queues</h2>
+                <h2 className="text-lg mb-3">Needs attention</h2>
                 {queue.length ? <ul className="grid gap-2">{queue.map(([n, t, href, Icon]) => <li key={t}><Link href={`/admin/${href}`} className="flex items-center gap-3 rounded-xl border border-line p-3 hover:border-forest"><Icon size={17} className="text-forest" /><span className="flex-1"><strong>{n}</strong> {t}</span>→</Link></li>)}</ul> : <p className="text-sm text-muted">Every queue is clear.</p>}
-                {d.metrics.refundsPending > 0 && <Link href="/admin/refunds" className="flex items-center gap-2 mt-3 text-sm text-warning font-semibold"><AlertTriangle size={15} />{d.metrics.refundsPending} refunds waiting to be paid</Link>}
+                {d.metrics.refundsPending > 0 && <Link href="/admin/refunds?status=PENDING_PROVIDER" className="flex items-center gap-2 mt-3 text-sm text-warning font-semibold"><AlertTriangle size={15} />{d.metrics.refundsPending} refunds waiting to be paid</Link>}
               </section>
             </div>
             <div className="grid gap-6 xl:grid-cols-3">
               <section className="card card-pad"><h2 className="text-lg mb-3">Order status</h2><Meter items={d.statusMix.map((s) => ({ label: label(s.value), value: s.count }))} /></section>
               <section className="card card-pad xl:col-span-2">
-                <h2 className="text-lg mb-3">Recent orders</h2>
+                <div className="flex justify-between items-center mb-3"><h2 className="text-lg">Recent orders</h2><Link href="/admin/orders" className="text-sm text-forest font-semibold">All orders →</Link></div>
                 <ul className="divide-y divide-line">{d.recentOrders.map((o) => <li key={o.id}><Link href={`/admin/orders?open=${o.id}`} className="flex flex-wrap items-center gap-3 py-2.5 text-sm hover:bg-cream"><span className="font-semibold w-44">{o.number}</span><span className="flex-1 text-muted">{o.customer} · {formatDateTime(o.createdAt)}</span><StatusBadge status={o.status} /><span className="font-semibold w-24 text-right">{formatMoney(o.totalPaise)}</span></Link></li>)}</ul>
               </section>
             </div>
-            {d.topSellers.length > 0 && <section className="card card-pad"><h2 className="text-lg mb-3">Top sellers by delivered sales</h2><ol className="grid gap-1.5">{d.topSellers.map((s, i) => <li key={s.id} className="flex justify-between text-sm"><span>{i + 1}. {s.name}</span><strong>{s.grossPaise == null ? '—' : formatMoney(s.grossPaise)}</strong></li>)}</ol></section>}
+            {d.topSellers.length > 0 && <section className="card card-pad"><h2 className="text-lg mb-3">Top sellers by delivered sales</h2><ol className="grid gap-1.5">{d.topSellers.map((s, i) => <li key={s.id} className="flex justify-between text-sm"><Link href={`/admin/sellers?open=${s.id}`} className="hover:underline">{i + 1}. {s.name}</Link><strong>{s.grossPaise == null ? '—' : formatMoney(s.grossPaise)}</strong></li>)}</ol></section>}
           </div>
         );
       }}</Loadable>
@@ -63,262 +65,341 @@ export function Overview() {
   );
 }
 
-// ───────────── Customers & staff ─────────────
-type UserRow = { id: string; name: string; email: string; phone: string | null; status: string; createdAt: string; roles: string[]; locked: boolean; orders: number; stores: number; organizations: number; guest: boolean };
-export function Customers({ canManage, canStaff }: { canManage: boolean; canStaff: boolean }) {
-  const [type, setType] = useState('');
-  const list = useAdminList<{ users: UserRow[]; page: number; pages: number; total: number }>('/admin/users', 'users', { type });
-  const [open, setOpen] = useState<string | null>(null);
+// ───────────── Customers ─────────────
+type UserRow = { id: string; name: string; email: string; phone: string | null; status: string; createdAt: string; emailVerifiedAt: string | null; roles: string[]; locked: boolean; orders: number; stores: number; organizations: number; guest: boolean; marketingOptIn: boolean };
+type Customer360 = {
+  user: UserRow & { isAdmin: boolean };
+  stats: { orders: number; byStatus: Record<string, number>; spentPaise: number; paidOrders: number; averageOrderPaise: number; lastOrderAt: string | null; returns: number; refundsPaise: number; activeSessions: number; wishlist: number; cartItems: number };
+  addresses: { id: string; name: string; line1: string; line2: string | null; city: string; state: string; pincode: string; phone: string; label: string; isDefault: boolean }[];
+  organizations: { id: string; name: string; status: string; role: string }[];
+  stores: { id: string; name: string; status: string; role: string }[];
+  orders: { id: string; number: string; createdAt: string; status: string; paymentStatus: string; paymentMethod: string; mode: string; totalPaise: number }[];
+  tickets: { id: string; number: string; subject: string; status: string; updatedAt: string }[];
+  activity: { id: string; action: string; createdAt: string; metadata: Record<string, unknown> }[];
+  notes: { id: string; body: string; authorName: string; authorId: string; createdAt: string }[];
+};
+
+export function Customers({ can }: { can: Can }) {
+  const list = useAdminTable<ListResponse & { users: UserRow[] }>('/admin/users', ['type', 'status', 'verified']);
+  const [open, setOpen] = useOpenParam();
+  const columns: Column<UserRow>[] = [
+    { key: 'name', label: 'Person', sort: 'name', always: true, render: (u) => <><p className="font-semibold">{u.name}</p><p className="text-xs text-muted">{u.email}</p></> },
+    { key: 'phone', label: 'Mobile', render: (u) => u.phone ?? '—' },
+    { key: 'joined', label: 'Joined', sort: 'joined', render: (u) => formatDate(u.createdAt) },
+    { key: 'orders', label: 'Orders', sort: 'orders', className: 'text-right', render: (u) => u.orders },
+    { key: 'type', label: 'Type', render: (u) => <span className="flex flex-wrap gap-1">{u.roles.map((r) => <Badge key={r} tone="gold">{label(r)}</Badge>)}{u.stores > 0 && <Badge>Seller</Badge>}{u.organizations > 0 && <Badge tone="info">Business</Badge>}{u.guest && <Badge tone="neutral">Guest</Badge>}{!u.roles.length && !u.stores && !u.organizations && !u.guest && <span className="text-muted text-sm">Customer</span>}</span> },
+    { key: 'verified', label: 'Email', render: (u) => u.emailVerifiedAt ? <Badge tone="success">Confirmed</Badge> : <Badge tone="warning">Unconfirmed</Badge> },
+    { key: 'marketing', label: 'Marketing', hidden: true, render: (u) => (u.marketingOptIn ? 'Opted in' : '—') },
+    { key: 'status', label: 'Status', render: (u) => <><StatusBadge status={u.status} />{u.locked && <Badge tone="warning" className="ml-1">Locked</Badge>}</> },
+  ];
   return (
-    <Section title="People" description="Customers, business buyers, sellers and staff." actions={<><Select className="min-h-[40px] py-1 w-auto" aria-label="Type" value={type} onChange={(e) => setType(e.target.value)}><option value="">Everyone</option><option value="business">Business buyers</option><option value="seller">Sellers</option><option value="staff">Staff</option></Select><SearchInput value={list.q} onChange={list.setQ} placeholder="Name, email or phone" /></>}>
-      <Loadable query={list}>{(d) => (
-        <>
-          <Table head={['Person', 'Joined', 'Orders', 'Roles', 'Status', '']} empty={!d.users.length}>
-            {d.users.map((u) => (
-              <tr key={u.id}>
-                <td><p className="font-semibold">{u.name}</p><p className="text-xs text-muted">{u.email}{u.phone ? ` · ${u.phone}` : ''}</p></td>
-                <td>{formatDate(u.createdAt)}</td><td>{u.orders}</td>
-                <td className="flex flex-wrap gap-1">{u.roles.map((r) => <Badge key={r} tone="gold">{r}</Badge>)}{u.stores > 0 && <Badge>Seller</Badge>}{u.organizations > 0 && <Badge tone="info">Business</Badge>}{u.guest && <Badge tone="neutral">Guest</Badge>}</td>
-                <td><StatusBadge status={u.status} />{u.locked && <Badge tone="warning" className="ml-1">Locked</Badge>}</td>
-                <td><Button size="sm" variant="outline" onClick={() => setOpen(u.id)}>Open</Button></td>
-              </tr>
-            ))}
-          </Table>
-          <Pager data={d} setPage={list.setPage} />
-        </>
-      )}</Loadable>
-      {open && <UserPanel id={open} onClose={() => { setOpen(null); list.refetch(); }} canManage={canManage} canStaff={canStaff} />}
+    <Section title="People" description="Customers, business buyers, sellers and staff. Click a row for the full customer view.">
+      <DataTable tableId="users" query={list} rows={list.data?.users} columns={columns} onOpen={(u) => setOpen(u.id)} search="Name, email or mobile" dateFilter="Joined"
+        filters={[
+          { key: 'type', label: 'Type', options: [['customer', 'Customers'], ['business', 'Business buyers'], ['seller', 'Sellers'], ['staff', 'Staff'], ['guest', 'Guest checkouts']] },
+          { key: 'status', label: 'Status', options: [['ACTIVE', 'Active'], ['SUSPENDED', 'Suspended']] },
+          { key: 'verified', label: 'Email', options: [['yes', 'Confirmed'], ['no', 'Not confirmed']] },
+        ]}
+        bulk={can('users.manage') ? { endpoint: '/admin/users/bulk', actions: [{ id: 'sign-out', label: 'Sign out everywhere', confirm: 'They will need to sign in again on every device.' }, { id: 'suspend', label: 'Suspend', danger: true, reason: 'required' }, { id: 'restore', label: 'Restore', reason: 'optional' }] } : undefined} />
+      {open && <CustomerDrawer id={open} can={can} onClose={() => { setOpen(null); list.refetch(); }} />}
     </Section>
   );
 }
 
-function UserPanel({ id, onClose, canManage, canStaff }: { id: string; onClose: () => void; canManage: boolean; canStaff: boolean }) {
-  const { data, refetch } = useQuery({ queryKey: ['admin', 'user', id], queryFn: () => api<{ user: UserRow & { emailVerifiedAt: string | null; marketingOptIn: boolean }; organizations: { id: string; name: string; status: string; role: string }[]; stores: { id: string; name: string; status: string; role: string }[]; orders: { id: string; number: string; createdAt: string; status: string; totalPaise: number }[]; tickets: { id: string; number: string; subject: string; status: string }[]; activity: { id: string; action: string; createdAt: string }[] }>(`/admin/users/${id}`) });
+function CustomerDrawer({ id, can, onClose }: { id: string; can: Can; onClose: () => void }) {
+  const { data, refetch, error } = useQuery({ queryKey: ['admin', 'user', id], queryFn: () => api<Customer360>(`/admin/users/${id}`) });
   const [roles, setRoles] = useState<string[] | null>(null);
+  const [edit, setEdit] = useState<{ name: string; phone: string } | null>(null);
+  const u = data?.user;
+  const manage = can('users.manage') && u && !u.isAdmin;
+  const run = async (fn: () => Promise<unknown>, msg: string) => { if (await attempt(fn, msg)) refetch(); };
   return (
-    <Modal open onOpenChange={(o) => !o && onClose()} title={data?.user.name ?? 'Loading…'} description={data?.user.email} wide>
-      {data && (
-        <div className="grid gap-5">
-          <div className="flex flex-wrap gap-2"><StatusBadge status={data.user.status} />{data.user.emailVerifiedAt ? <Badge tone="success">Email confirmed</Badge> : <Badge tone="warning">Email not confirmed</Badge>}{data.user.locked && <Badge tone="warning">Locked after failed sign-ins</Badge>}</div>
-          {canManage && !data.user.roles.includes('ADMIN') && (
-            <div className="flex flex-wrap gap-2">
-              <ConfirmButton danger={data.user.status === 'ACTIVE'} title={data.user.status === 'ACTIVE' ? 'Suspend this account?' : 'Restore this account?'} body={data.user.status === 'ACTIVE' ? 'They are signed out everywhere and cannot sign in.' : undefined} reason={{ label: 'Reason (kept in the audit log)' }} confirmLabel={data.user.status === 'ACTIVE' ? 'Suspend' : 'Restore'} onConfirm={async (reason) => { await patch(`/admin/users/${id}/status`, { status: data.user.status === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE', reason }); refetch(); }}>{data.user.status === 'ACTIVE' ? 'Suspend' : 'Restore'}</ConfirmButton>
-              {data.user.locked && <Button size="sm" variant="outline" onClick={async () => { await post(`/admin/users/${id}/unlock`); refetch(); }}>Unlock sign-in</Button>}
+    <Drawer open onClose={onClose} wide title={u?.name ?? 'Loading…'} subtitle={u ? `${u.email}${u.phone ? ` · ${u.phone}` : ''} · joined ${formatDate(u.createdAt)}` : undefined}
+      badges={u && <><StatusBadge status={u.status} />{u.emailVerifiedAt ? <Badge tone="success">Email confirmed</Badge> : <Badge tone="warning">Email not confirmed</Badge>}{u.locked && <Badge tone="warning">Locked after failed sign-ins</Badge>}{u.guest && <Badge tone="neutral">Guest checkout</Badge>}{u.roles.map((r) => <Badge key={r} tone="gold">{label(r)}</Badge>)}</>}
+      actions={manage && <>
+        <ConfirmButton danger={u.status === 'ACTIVE'} title={u.status === 'ACTIVE' ? 'Suspend this account?' : 'Restore this account?'} body={u.status === 'ACTIVE' ? 'They are signed out everywhere and cannot sign in.' : undefined} reason={{ label: 'Reason (kept in the audit log)' }} confirmLabel={u.status === 'ACTIVE' ? 'Suspend' : 'Restore'} onConfirm={async (reason) => { await patch(`/admin/users/${id}/status`, { status: u.status === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE', reason }); refetch(); }}>{u.status === 'ACTIVE' ? 'Suspend' : 'Restore'}</ConfirmButton>
+        <ConfirmButton title="Sign out on every device?" body="Useful if the account may be compromised." confirmLabel="Sign out everywhere" onConfirm={async () => { const r = await post<{ sessions: number }>(`/admin/users/${id}/sign-out`); toast.success(`${r.sessions} sessions ended`); refetch(); }}>Sign out everywhere</ConfirmButton>
+        {u.locked && <Button size="sm" variant="outline" onClick={() => run(() => post(`/admin/users/${id}/unlock`), 'Sign-in unlocked')}>Unlock sign-in</Button>}
+        <Button size="sm" variant="outline" onClick={() => setEdit({ name: u.name, phone: u.phone ?? '' })}>Edit details</Button>
+        <Button size="sm" variant="ghost" onClick={() => run(() => patch(`/admin/users/${id}`, { emailVerified: !u.emailVerifiedAt }), u.emailVerifiedAt ? 'Marked unconfirmed' : 'Email marked confirmed')}>{u.emailVerifiedAt ? 'Mark email unconfirmed' : 'Mark email confirmed'}</Button>
+      </>}>
+      {error && <Alert>{(error as Error).message}</Alert>}
+      {data && u && <>
+        {u.isAdmin && <Alert tone="info">This is the Admin account. Its role, password and status are managed only with the server’s admin script.</Alert>}
+        {edit && (
+          <Panel title="Edit details">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Name"><Input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></Field>
+              <Field label="Mobile" hint="10 digits, or leave blank"><Input inputMode="numeric" value={edit.phone} onChange={(e) => setEdit({ ...edit, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })} /></Field>
             </div>
-          )}
-          {data.user.roles.includes('ADMIN') && <Alert tone="info">This is the Admin account. Its role, password and status are managed only with the server’s admin script.</Alert>}
-          {canStaff && !data.user.roles.includes('ADMIN') && (
-            <fieldset className="rounded-xl border border-line p-4"><legend className="label px-1">Staff roles</legend>
-              <div className="flex flex-wrap gap-4">{['OPERATIONS', 'FINANCE', 'SUPPORT'].map((r) => <label key={r} className="flex items-center gap-2 text-sm"><input type="checkbox" className="checkbox mt-0" checked={(roles ?? data.user.roles).includes(r)} onChange={(e) => setRoles(e.target.checked ? [...(roles ?? data.user.roles), r] : (roles ?? data.user.roles).filter((x) => x !== r))} />{label(r)}</label>)}</div>
-              {roles && <Button size="sm" className="mt-3" onClick={async () => { try { await put(`/admin/users/${id}/roles`, { roles }); toast.success('Roles updated; they’ll be asked to sign in again'); setRoles(null); refetch(); } catch (e) { toast.error((e as Error).message); } }}>Save roles</Button>}
-            </fieldset>
-          )}
-          {(data.organizations.length > 0 || data.stores.length > 0) && <p className="text-sm">{[...data.organizations.map((o) => `Business: ${o.name} (${o.role.toLowerCase()}, ${label(o.status).toLowerCase()})`), ...data.stores.map((s) => `Store: ${s.name} (${s.role.toLowerCase()}, ${label(s.status).toLowerCase()})`)].join(' · ')}</p>}
-          <div><p className="label mb-2">Orders</p><ul className="text-sm grid gap-1">{data.orders.map((o) => <li key={o.id} className="flex justify-between"><span>{o.number} · {formatDate(o.createdAt)}</span><span>{label(o.status)} · {formatMoney(o.totalPaise)}</span></li>)}{!data.orders.length && <li className="text-muted">None</li>}</ul></div>
-          <div><p className="label mb-2">Recent activity</p><ul className="text-sm grid gap-1 max-h-48 overflow-y-auto">{data.activity.map((a) => <li key={a.id} className="flex justify-between gap-3"><span>{a.action}</span><span className="text-muted">{formatDateTime(a.createdAt)}</span></li>)}</ul></div>
+            <div className="flex gap-2 mt-3"><Button size="sm" onClick={() => run(async () => { await patch(`/admin/users/${id}`, { name: edit.name, phone: edit.phone || null }); setEdit(null); }, 'Saved')}>Save</Button><Button size="sm" variant="ghost" onClick={() => setEdit(null)}>Cancel</Button></div>
+          </Panel>
+        )}
+        <MiniStats items={[
+          ['Lifetime spend', formatMoney(data.stats.spentPaise), `${data.stats.paidOrders} paid orders`], ['Average order', formatMoney(data.stats.averageOrderPaise)],
+          ['Orders', data.stats.orders, data.stats.lastOrderAt ? `last ${formatDate(data.stats.lastOrderAt)}` : 'none paid yet'], ['Returns · refunds', `${data.stats.returns} · ${formatMoney(data.stats.refundsPaise)}`],
+          ['Signed-in devices', data.stats.activeSessions], ['Wishlist', data.stats.wishlist], ['In cart', data.stats.cartItems], ['Marketing', u.marketingOptIn ? 'Opted in' : 'Not opted in'],
+        ]} />
+        {can('staff.manage') && !u.isAdmin && (
+          <Panel title="Staff roles" actions={<Link href="/admin/staff" className="text-xs text-forest font-semibold">What each role can do →</Link>}>
+            <div className="flex flex-wrap gap-4">{['OPERATIONS', 'FINANCE', 'SUPPORT'].map((r) => <label key={r} className="flex items-center gap-2 text-sm"><input type="checkbox" className="checkbox mt-0" checked={(roles ?? u.roles).includes(r)} onChange={(e) => setRoles(e.target.checked ? [...(roles ?? u.roles), r] : (roles ?? u.roles).filter((x) => x !== r))} />{label(r)}</label>)}</div>
+            {roles && <Button size="sm" className="mt-3" onClick={() => run(async () => { await put(`/admin/users/${id}/roles`, { roles }); setRoles(null); }, 'Roles updated; they’ll be asked to sign in again')}>Save roles</Button>}
+          </Panel>
+        )}
+        {(data.organizations.length > 0 || data.stores.length > 0) && (
+          <Panel title="Accounts">
+            <ul className="grid gap-1.5 text-sm">
+              {data.organizations.map((o) => <li key={o.id} className="flex justify-between"><Link className="font-semibold hover:underline" href={`/admin/organizations?open=${o.id}`}>{o.name}</Link><span className="text-muted">Business · {label(o.role)} · <StatusBadge status={o.status} /></span></li>)}
+              {data.stores.map((s) => <li key={s.id} className="flex justify-between"><Link className="font-semibold hover:underline" href={`/admin/sellers?open=${s.id}`}>{s.name}</Link><span className="text-muted">Store · {label(s.role)} · <StatusBadge status={s.status} /></span></li>)}
+            </ul>
+          </Panel>
+        )}
+        <Panel title={`Orders (${data.stats.orders})`} actions={<Link href={`/admin/orders?user=${id}`} className="text-xs text-forest font-semibold">All orders →</Link>}>
+          {data.orders.length ? <Table head={['Order', 'Date', 'Payment', 'Status', 'Total']}>{data.orders.map((o) => <tr key={o.id}><td><Link className="font-semibold hover:underline" href={`/admin/orders?open=${o.id}`}>{o.number}</Link>{o.mode === 'BUSINESS' && <Badge tone="info" className="ml-1">B2B</Badge>}</td><td>{formatDate(o.createdAt)}</td><td><StatusBadge status={o.paymentStatus} text={PAYMENT_TEXT[o.paymentStatus]} /></td><td><StatusBadge status={o.status} /></td><td className="font-semibold">{formatMoney(o.totalPaise)}</td></tr>)}</Table> : <p className="text-sm text-muted">No orders yet.</p>}
+        </Panel>
+        <div className="grid gap-4 md:grid-cols-2">
+          <Panel title="Addresses">{data.addresses.length ? <ul className="grid gap-2 text-sm">{data.addresses.map((a) => <li key={a.id}><p className="font-semibold">{a.label}{a.isDefault && <Badge tone="success" className="ml-1">Default</Badge>}</p><p className="text-muted">{a.name}, {a.line1}{a.line2 ? `, ${a.line2}` : ''}, {a.city}, {a.state} {a.pincode} · {a.phone}</p></li>)}</ul> : <p className="text-sm text-muted">None saved.</p>}</Panel>
+          <Panel title="Support tickets">{data.tickets.length ? <ul className="grid gap-1.5 text-sm">{data.tickets.map((t) => <li key={t.id} className="flex justify-between gap-2"><span>{t.number} · {t.subject}</span><StatusBadge status={t.status} /></li>)}</ul> : <p className="text-sm text-muted">No tickets.</p>}</Panel>
         </div>
-      )}
-    </Modal>
+        <NotesPanel entityType="user" entityId={id} initial={data.notes} />
+        <Panel title="Activity"><Timeline items={data.activity.map((a) => ({ id: a.id, title: label(a.action.replace(/[.-]/g, '_')), at: a.createdAt, note: typeof a.metadata?.reason === 'string' ? a.metadata.reason : undefined }))} /></Panel>
+      </>}
+    </Drawer>
   );
 }
 
-export function StaffRoles() {
-  const query = useQuery({ queryKey: ['admin', 'staff'], queryFn: () => api<{ staff: { id: string; name: string; email: string; status: string; roles: string[] }[]; roles: { id: string; label: string; description: string }[] }>('/admin/staff') });
+// ───────────── Staff roles and permissions ─────────────
+export function StaffRoles({ isAdmin }: { isAdmin: boolean }) {
+  const staff = useQuery({ queryKey: ['admin', 'staff'], queryFn: () => api<{ staff: { id: string; name: string; email: string; status: string; roles: string[] }[]; roles: { id: string; label: string; description: string }[] }>('/admin/staff') });
+  const perms = useQuery({ queryKey: ['admin', 'permissions'], queryFn: () => api<{ matrix: Record<string, string[]>; roles: { id: string; label: string }[]; capabilities: { id: string; label: string }[] }>('/admin/permissions') });
+  const [draft, setDraft] = useState<Record<string, string[]> | null>(null);
+  const matrix = draft ?? perms.data?.matrix;
+  const toggle = (role: string, cap: string) => { if (!matrix) return; const has = matrix[role].includes(cap); setDraft({ ...matrix, [role]: has ? matrix[role].filter((c) => c !== cap) : [...matrix[role], cap] }); };
   return (
-    <Section title="Staff roles" description="Grant Operations, Finance or Support from People → Open. Nobody can be made Admin from the console. Role changes sign the person out.">
-      <Loadable query={query}>{(d) => (
-        <div className="grid gap-5">
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">{d.roles.map((r) => <div key={r.id} className="card card-pad"><p className="font-semibold">{r.label}</p><p className="text-sm text-muted mt-1">{r.description}</p></div>)}</div>
-          <Table head={['Staff member', 'Roles', 'Status']}>{d.staff.map((s) => <tr key={s.id}><td><p className="font-semibold">{s.name}</p><p className="text-xs text-muted">{s.email}</p></td><td className="flex gap-1">{s.roles.map((r) => <Badge key={r} tone="gold">{r}</Badge>)}</td><td><StatusBadge status={s.status} /></td></tr>)}</Table>
-        </div>
-      )}</Loadable>
+    <Section title="Staff and permissions" description="Grant Operations, Finance or Support from a person’s page. Nobody can be made Admin from the console, and role changes sign the person out.">
+      <div className="grid gap-6">
+        <Loadable query={staff}>{(d) => (
+          <Table head={['Staff member', 'Roles', 'Status']} empty={!d.staff.length}>{d.staff.map((s) => <tr key={s.id}><td><Link href={`/admin/customers?open=${s.id}`} className="font-semibold hover:underline">{s.name}</Link><p className="text-xs text-muted">{s.email}</p></td><td><span className="flex flex-wrap gap-1">{s.roles.map((r) => <Badge key={r} tone="gold">{label(r)}</Badge>)}</span></td><td><StatusBadge status={s.status} /></td></tr>)}</Table>
+        )}</Loadable>
+        <Loadable query={perms}>{(d) => matrix && (
+          <section className="card card-pad">
+            <div className="flex flex-wrap justify-between gap-3 mb-4">
+              <div><h2 className="text-lg">What each role can do</h2><p className="text-sm text-muted">{isAdmin ? 'Switch individual permissions on or off. The Admin always has everything, and managing staff is reserved for the Admin.' : 'Only the Admin can change these.'}</p></div>
+              {isAdmin && draft && <div className="flex gap-2"><Button variant="ghost" size="sm" onClick={() => setDraft(null)}>Discard</Button><Button size="sm" onClick={async () => { if (await attempt(() => put('/admin/permissions', draft), 'Permissions saved. They apply within 15 seconds.')) { setDraft(null); perms.refetch(); } }}>Save permissions</Button></div>}
+            </div>
+            <div className="table-wrap">
+              <table className="table">
+                <thead><tr><th>Permission</th><th className="text-center">Admin</th>{d.roles.map((r) => <th key={r.id} className="text-center">{r.label}</th>)}</tr></thead>
+                <tbody>
+                  {d.capabilities.map((c) => (
+                    <tr key={c.id}>
+                      <td><p className="font-medium text-sm">{c.label}</p><p className="text-[11px] text-muted font-mono">{c.id}</p></td>
+                      <td className="text-center"><Lock size={14} className="inline text-muted" aria-label="Always on" /></td>
+                      {d.roles.map((r) => <td key={r.id} className="text-center"><input type="checkbox" className="checkbox mt-0" aria-label={`${r.label}: ${c.label}`} disabled={!isAdmin} checked={matrix[r.id]?.includes(c.id)} onChange={() => toggle(r.id, c.id)} /></td>)}
+                    </tr>
+                  ))}
+                  <tr><td><p className="font-medium text-sm">Manage staff roles and permissions</p><p className="text-[11px] text-muted font-mono">staff.manage</p></td><td className="text-center"><Lock size={14} className="inline text-muted" /></td>{d.roles.map((r) => <td key={r.id} className="text-center text-xs text-muted">Admin only</td>)}</tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}</Loadable>
+      </div>
     </Section>
   );
 }
 
 // ───────────── Business accounts ─────────────
-type Org = { id: string; legalName: string; tradeName: string | null; status: string; gstRegistered: boolean; gstin: string | null; pan: string | null; businessType: string; contactPhone: string; registeredAddress: { line1: string; city: string; state: string; pincode: string }; createdAt: string; owner: { name: string; email: string } | null; memberCount: number; orders: number; creditApproved: boolean; allowedTerms: string };
-export function Organizations({ canFinance }: { canFinance: boolean }) {
-  const [status, setStatus] = useState('');
-  const list = useAdminList<{ organizations: Org[] }>('/admin/organizations', 'orgs', { status });
-  const act = async (id: string, body: object) => { try { await patch(`/admin/organizations/${id}`, body); toast.success('Saved'); list.refetch(); } catch (e) { toast.error((e as Error).message); } };
+type Addr = { line1: string; city: string; state: string; pincode: string };
+type OrgRow = { id: string; legalName: string; tradeName: string | null; status: string; gstRegistered: boolean; gstin: string | null; pan: string | null; businessType: string; contactPhone: string; registeredAddress: Addr; createdAt: string; owner: { name: string; email: string } | null; memberCount: number; orders: number; purchaseOrders: number; rfqs: number; creditApproved: boolean; allowedTerms: string; creditLimitPaise: number };
+type Org360 = {
+  organization: OrgRow & { approvalThresholdPaise: number; verifications: { id: string; kind: string; status: string; createdAt: string }[] };
+  members: { id: string; name: string; email: string; role: string }[];
+  stats: { spendPaise: number; paidOrders: number; outstandingPaise: number; availableCreditPaise: number };
+  orders: { id: string; number: string; createdAt: string; status: string; paymentStatus: string; paymentMethod: string; totalPaise: number; paymentDueAt: string | null }[];
+  rfqs: { id: string; number: string; title: string; status: string; createdAt: string }[];
+  purchaseOrders: { id: string; number: string; status: string; totalPaise: number; paymentTerms: string; createdAt: string }[];
+  activity: { id: string; action: string; createdAt: string; metadata: Record<string, unknown> }[];
+  notes: Customer360['notes'];
+};
+
+export function Organizations({ can }: { can: Can }) {
+  const list = useAdminTable<ListResponse & { organizations: OrgRow[] }>('/admin/organizations', ['status', 'credit', 'gst']);
+  const [open, setOpen] = useOpenParam();
+  const columns: Column<OrgRow>[] = [
+    { key: 'name', label: 'Business', sort: 'name', always: true, render: (o) => <><p className="font-semibold">{o.legalName}</p><p className="text-xs text-muted">{o.tradeName ?? label(o.businessType)}</p></> },
+    { key: 'gstin', label: 'GSTIN / PAN', render: (o) => <span className="font-mono text-xs">{o.gstin ?? o.pan ?? 'Not registered'}</span> },
+    { key: 'owner', label: 'Owner', render: (o) => <span className="text-sm">{o.owner?.name}<span className="block text-xs text-muted">{o.owner?.email}</span></span> },
+    { key: 'city', label: 'City', hidden: true, render: (o) => `${o.registeredAddress.city}, ${o.registeredAddress.state}` },
+    { key: 'orders', label: 'Orders', sort: 'orders', className: 'text-right', render: (o) => o.orders },
+    { key: 'credit', label: 'Credit', render: (o) => o.creditApproved ? <span className="text-sm">{label(o.allowedTerms)}<span className="block text-xs text-muted">limit {formatMoney(o.creditLimitPaise)}</span></span> : <span className="text-muted text-sm">Prepaid</span> },
+    { key: 'applied', label: 'Applied', sort: 'applied', render: (o) => formatDate(o.createdAt) },
+    { key: 'status', label: 'Status', render: (o) => <StatusBadge status={o.status} /> },
+  ];
   return (
-    <Section title="Business accounts" description="Verify businesses before they can request quotes. Self-entered details are not treated as verified; check GSTIN/PAN against official records." actions={<><Select aria-label="Status" className="min-h-[40px] py-1 w-auto" value={status} onChange={(e) => setStatus(e.target.value)}><option value="">All</option><option value="PENDING">Pending</option><option value="APPROVED">Approved</option><option value="REJECTED">Rejected</option></Select><SearchInput value={list.q} onChange={list.setQ} placeholder="Name or GSTIN" /></>}>
-      <Loadable query={list}>{(d) => (
-        <div className="grid gap-3">
-          {d.organizations.map((o) => (
-            <article key={o.id} className="card card-pad">
-              <div className="flex flex-wrap justify-between gap-3">
-                <div><p className="font-semibold">{o.legalName}{o.tradeName ? ` (${o.tradeName})` : ''}</p><p className="text-sm text-muted">{label(o.businessType)} · {o.gstin ? `GSTIN ${o.gstin}` : 'Not GST-registered'}{o.pan ? ` · PAN ${o.pan}` : ''} · {o.contactPhone}</p><p className="text-sm text-muted">{o.registeredAddress.line1}, {o.registeredAddress.city}, {o.registeredAddress.state} {o.registeredAddress.pincode}</p><p className="text-xs text-muted mt-1">Owner {o.owner?.name} ({o.owner?.email}) · {o.memberCount} members · {o.orders} orders · applied {formatDate(o.createdAt)}</p></div>
-                <div className="flex flex-col items-end gap-1"><StatusBadge status={o.status} />{o.creditApproved && <Badge tone="gold">Credit: {label(o.allowedTerms)}</Badge>}</div>
-              </div>
-              <div className="flex flex-wrap gap-2 mt-4">
-                {o.status !== 'APPROVED' && <Button size="sm" onClick={() => act(o.id, { status: 'APPROVED' })}>Approve</Button>}
-                {o.status === 'PENDING' && <ConfirmButton danger title="Reject this business?" reason={{ label: 'Reason sent to the owner' }} confirmLabel="Reject" onConfirm={(note) => act(o.id, { status: 'REJECTED', note })}>Reject</ConfirmButton>}
-                {o.status === 'APPROVED' && <ConfirmButton danger title="Suspend this business?" reason={{ label: 'Reason' }} confirmLabel="Suspend" onConfirm={(note) => act(o.id, { status: 'SUSPENDED', note })}>Suspend</ConfirmButton>}
-                {canFinance && o.status === 'APPROVED' && (
-                  <label className="flex items-center gap-2 text-sm ml-auto">Credit terms
-                    <Select className="min-h-[36px] py-1 w-auto" value={o.creditApproved ? o.allowedTerms : 'NONE'} onChange={(e) => act(o.id, e.target.value === 'NONE' ? { creditApproved: false, allowedTerms: 'PREPAID' } : { creditApproved: true, allowedTerms: e.target.value })}>
-                      <option value="NONE">None (prepaid)</option><option value="NET_15">Net 15</option><option value="NET_30">Net 30</option><option value="NET_45">Net 45</option>
-                    </Select>
-                  </label>
-                )}
-              </div>
-            </article>
-          ))}
-          {!d.organizations.length && <p className="text-muted">No business accounts match.</p>}
-        </div>
-      )}</Loadable>
+    <Section title="Business accounts" description="Verify businesses before they can request quotes. Self-entered details are not treated as verified; check GSTIN/PAN against official records.">
+      <DataTable tableId="orgs" query={list} rows={list.data?.organizations} columns={columns} onOpen={(o) => setOpen(o.id)} search="Name or GSTIN" dateFilter="Applied"
+        filters={[{ key: 'status', label: 'Status', options: [['PENDING', 'Pending'], ['APPROVED', 'Approved'], ['REJECTED', 'Rejected'], ['SUSPENDED', 'Suspended']] }, { key: 'credit', label: 'Credit', options: [['yes', 'On credit terms'], ['no', 'Prepaid']] }, { key: 'gst', label: 'GST', options: [['yes', 'GST-registered'], ['no', 'Not registered']] }]}
+        bulk={can('approvals.manage') ? { endpoint: '/admin/organizations/bulk', actions: [{ id: 'approve', label: 'Approve' }, { id: 'reject', label: 'Reject', danger: true, reason: 'required' }, { id: 'suspend', label: 'Suspend', danger: true, reason: 'required' }] } : undefined} />
+      {open && <OrgDrawer id={open} can={can} onClose={() => { setOpen(null); list.refetch(); }} />}
     </Section>
+  );
+}
+
+function OrgDrawer({ id, can, onClose }: { id: string; can: Can; onClose: () => void }) {
+  const { data, refetch, error } = useQuery({ queryKey: ['admin', 'org', id], queryFn: () => api<Org360>(`/admin/organizations/${id}`) });
+  const [credit, setCredit] = useState<{ terms: string; limit: string } | null>(null);
+  const o = data?.organization;
+  const act = async (body: object, msg = 'Saved') => { if (await attempt(() => patch(`/admin/organizations/${id}`, body), msg)) refetch(); };
+  return (
+    <Drawer open onClose={onClose} wide title={o?.legalName ?? 'Loading…'} subtitle={o ? `${o.tradeName ? `${o.tradeName} · ` : ''}${label(o.businessType)} · applied ${formatDate(o.createdAt)}` : undefined}
+      badges={o && <><StatusBadge status={o.status} />{o.gstRegistered ? <Badge tone="info">GSTIN {o.gstin}</Badge> : <Badge tone="neutral">Not GST-registered</Badge>}{o.creditApproved && <Badge tone="gold">Credit {label(o.allowedTerms)}</Badge>}</>}
+      actions={o && can('approvals.manage') && <>
+        {o.status !== 'APPROVED' && <Button size="sm" onClick={() => act({ status: 'APPROVED' }, 'Approved')}>Approve</Button>}
+        {o.status === 'PENDING' && <ConfirmButton danger title="Reject this business?" reason={{ label: 'Reason sent to the owner' }} confirmLabel="Reject" onConfirm={(note) => act({ status: 'REJECTED', note })}>Reject</ConfirmButton>}
+        {o.status === 'APPROVED' && <ConfirmButton danger title="Suspend this business?" body="Its team can’t place new orders or requests." reason={{ label: 'Reason sent to the owner' }} confirmLabel="Suspend" onConfirm={(note) => act({ status: 'SUSPENDED', note })}>Suspend</ConfirmButton>}
+        {can('finance.manage') && o.status === 'APPROVED' && <Button size="sm" variant="outline" onClick={() => setCredit({ terms: o.creditApproved ? o.allowedTerms : 'NONE', limit: String(o.creditLimitPaise / 100) })}>Credit terms</Button>}
+      </>}>
+      {error && <Alert>{(error as Error).message}</Alert>}
+      {data && o && <>
+        {credit && (
+          <Panel title="Credit terms (finance)">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Terms"><Select value={credit.terms} onChange={(e) => setCredit({ ...credit, terms: e.target.value })}><option value="NONE">None (prepaid only)</option><option value="NET_15">Net 15</option><option value="NET_30">Net 30</option><option value="NET_45">Net 45</option></Select></Field>
+              <Field label="Credit limit (₹)" hint="Unpaid credit orders can never exceed this"><Input inputMode="decimal" disabled={credit.terms === 'NONE'} value={credit.limit} onChange={(e) => setCredit({ ...credit, limit: e.target.value })} /></Field>
+            </div>
+            <div className="flex gap-2 mt-3"><Button size="sm" onClick={async () => { await act(credit.terms === 'NONE' ? { creditApproved: false, allowedTerms: 'PREPAID', creditLimitPaise: 0 } : { creditApproved: true, allowedTerms: credit.terms, creditLimitPaise: rupeesToPaise(credit.limit || '0') }, 'Credit updated'); setCredit(null); }}>Save credit</Button><Button size="sm" variant="ghost" onClick={() => setCredit(null)}>Cancel</Button></div>
+          </Panel>
+        )}
+        <MiniStats items={[
+          ['Paid spend', formatMoney(data.stats.spendPaise), `${data.stats.paidOrders} orders`], ['Outstanding on credit', formatMoney(data.stats.outstandingPaise)],
+          ['Credit limit', o.creditApproved ? formatMoney(o.creditLimitPaise) : '—'], ['Available credit', o.creditApproved ? formatMoney(data.stats.availableCreditPaise) : '—'],
+        ]} />
+        <Panel title="Details">
+          <KV items={[['GSTIN', o.gstin], ['PAN', o.pan], ['Phone', o.contactPhone], ['Registered address', `${o.registeredAddress.line1}, ${o.registeredAddress.city}, ${o.registeredAddress.state} ${o.registeredAddress.pincode}`], ['PO approval above', o.approvalThresholdPaise ? formatMoney(o.approvalThresholdPaise) : 'Every PO'], ['Members', o.memberCount]]} />
+        </Panel>
+        <Panel title="Team"><ul className="grid gap-1.5 text-sm">{data.members.map((m) => <li key={m.id} className="flex justify-between"><Link href={`/admin/customers?open=${m.id}`} className="hover:underline">{m.name} <span className="text-muted">{m.email}</span></Link><Badge tone="neutral">{label(m.role)}</Badge></li>)}</ul></Panel>
+        <Panel title="Orders" actions={<Link href={`/admin/orders?organization=${id}`} className="text-xs text-forest font-semibold">All orders →</Link>}>
+          {data.orders.length ? <Table head={['Order', 'Date', 'Payment', 'Due', 'Total']}>{data.orders.map((x) => <tr key={x.id}><td><Link href={`/admin/orders?open=${x.id}`} className="font-semibold hover:underline">{x.number}</Link></td><td>{formatDate(x.createdAt)}</td><td><StatusBadge status={x.paymentStatus} text={PAYMENT_TEXT[x.paymentStatus]} /></td><td>{x.paymentDueAt ? formatDate(x.paymentDueAt) : '—'}</td><td className="font-semibold">{formatMoney(x.totalPaise)}</td></tr>)}</Table> : <p className="text-sm text-muted">No orders yet.</p>}
+        </Panel>
+        <div className="grid gap-4 md:grid-cols-2">
+          <Panel title="Purchase orders">{data.purchaseOrders.length ? <ul className="grid gap-1.5 text-sm">{data.purchaseOrders.map((p) => <li key={p.id} className="flex justify-between gap-2"><span>{p.number} · {label(p.paymentTerms)}</span><span><StatusBadge status={p.status} /> {formatMoney(p.totalPaise)}</span></li>)}</ul> : <p className="text-sm text-muted">None.</p>}</Panel>
+          <Panel title="RFQs">{data.rfqs.length ? <ul className="grid gap-1.5 text-sm">{data.rfqs.map((r) => <li key={r.id} className="flex justify-between gap-2"><span>{r.number} · {r.title}</span><StatusBadge status={r.status} /></li>)}</ul> : <p className="text-sm text-muted">None.</p>}</Panel>
+        </div>
+        <NotesPanel entityType="organization" entityId={id} initial={data.notes} />
+        <Panel title="Activity"><Timeline items={data.activity.map((a) => ({ id: a.id, title: label(a.action.replace(/[.-]/g, '_')), at: a.createdAt, note: typeof a.metadata?.note === 'string' ? a.metadata.note : undefined }))} /></Panel>
+      </>}
+    </Drawer>
   );
 }
 
 // ───────────── Sellers ─────────────
-type Seller = { id: string; slug: string; name: string; legalName: string; status: string; gstRegistered: boolean; gstin: string | null; pan: string | null; businessType: string; contactPhone: string; pickupAddress: { line1: string; city: string; state: string; pincode: string }; primaryCategory: string; createdAt: string; description: string; owner: { name: string; email: string } | null; staff: number; listings: number; payoutAccount: { accountHolder: string; accountLast4: string; ifsc: string; verified: boolean } | null; payablePaise: number | null };
-export function Sellers({ canFinance }: { canFinance: boolean }) {
-  const [status, setStatus] = useState('');
-  const list = useAdminList<{ sellers: Seller[] }>('/admin/sellers', 'sellers', { status });
-  const act = async (id: string, body: object) => { try { await patch(`/admin/sellers/${id}`, body); toast.success('Saved'); list.refetch(); } catch (e) { toast.error((e as Error).message); } };
+type SellerRow = { id: string; slug: string; name: string; legalName: string; status: string; gstRegistered: boolean; gstin: string | null; pan: string | null; businessType: string; contactPhone: string; pickupAddress: Addr; primaryCategory: string | null; createdAt: string; owner: { name: string; email: string } | null; staff: number; listings: number; parcels: number; commissionBps: number | null; payoutHold: boolean; demo: boolean; payoutAccount: { accountHolder: string; accountLast4: string; ifsc: string; verified: boolean } | null; payablePaise: number | null };
+type Seller360 = {
+  seller: Omit<SellerRow, 'owner' | 'staff' | 'listings' | 'parcels' | 'payablePaise'> & { description: string; payoutHoldReason: string | null; codEnabled: boolean; handlingDays: number; payoutAccount: (SellerRow['payoutAccount'] & { bankName: string | null }) | null };
+  team: { id: string; name: string; email: string; role: string }[];
+  performance: { parcels: number; delivered: number; cancelled: number; cancelRate: number; returns: number; returnRate: number; avgHoursToShip: number | null; rating: { average: number; count: number } | null; listings: Record<string, number> };
+  money: { salesPaise: number; shippingPaise: number; commissionPaise: number; refundsPaise: number; paidOutPaise: number; payablePaise: number; payouts: { id: string; amountPaise: number; providerRef: string; createdAt: string }[] } | null;
+  recentParcels: { id: string; orderId: string; orderNumber: string; status: string; totalPaise: number; paymentMethod: string; createdAt: string }[];
+  activity: { id: string; action: string; createdAt: string; metadata: Record<string, unknown> }[];
+  notes: Customer360['notes'];
+};
+
+export function Sellers({ can }: { can: Can }) {
+  const list = useAdminTable<ListResponse & { sellers: SellerRow[] }>('/admin/sellers', ['status', 'hold', 'gst']);
+  const [open, setOpen] = useOpenParam();
+  const columns: Column<SellerRow>[] = [
+    { key: 'name', label: 'Store', sort: 'name', always: true, render: (s) => <><p className="font-semibold">{s.name}{s.demo && <Badge tone="gold" className="ml-1">Demo</Badge>}</p><p className="text-xs text-muted">{s.legalName}</p></> },
+    { key: 'category', label: 'Category', render: (s) => s.primaryCategory ?? '—' },
+    { key: 'gstin', label: 'GSTIN', hidden: true, render: (s) => <span className="font-mono text-xs">{s.gstin ?? 'Not registered'}</span> },
+    { key: 'owner', label: 'Owner', hidden: true, render: (s) => s.owner?.email ?? '—' },
+    { key: 'listings', label: 'Listings', sort: 'listings', className: 'text-right', render: (s) => s.listings },
+    { key: 'parcels', label: 'Parcels', className: 'text-right', render: (s) => s.parcels },
+    { key: 'commission', label: 'Commission', render: (s) => (s.commissionBps == null ? <span className="text-muted text-sm">Default</span> : pct(s.commissionBps)) },
+    { key: 'bank', label: 'Bank', render: (s) => (s.payoutAccount ? (s.payoutAccount.verified ? <Badge tone="success">Verified</Badge> : <Badge tone="warning">Unverified</Badge>) : <span className="text-muted text-sm">None</span>) },
+    { key: 'payable', label: 'Payable', className: 'text-right', render: (s) => (s.payablePaise == null ? '—' : <>{formatMoney(s.payablePaise)}{s.payoutHold && <Badge tone="danger" className="ml-1">Hold</Badge>}</>) },
+    { key: 'applied', label: 'Applied', sort: 'applied', hidden: true, render: (s) => formatDate(s.createdAt) },
+    { key: 'status', label: 'Status', render: (s) => <StatusBadge status={s.status} /> },
+  ];
   return (
-    <Section title="Sellers" description="Approve stores after checking identity and tax details. Finance verifies bank accounts before any payout." actions={<><Select aria-label="Status" className="min-h-[40px] py-1 w-auto" value={status} onChange={(e) => setStatus(e.target.value)}><option value="">All</option><option value="PENDING">Applications</option><option value="APPROVED">Approved</option><option value="SUSPENDED">Suspended</option></Select><SearchInput value={list.q} onChange={list.setQ} placeholder="Store, legal name or GSTIN" /></>}>
-      <Loadable query={list}>{(d) => (
-        <div className="grid gap-3">
-          {d.sellers.map((s) => (
-            <article key={s.id} className="card card-pad">
-              <div className="flex flex-wrap justify-between gap-3">
-                <div className="max-w-2xl"><p className="font-semibold">{s.name} <span className="font-normal text-muted">· {s.legalName}</span></p><p className="text-sm text-muted">{label(s.businessType)} · {s.primaryCategory} · {s.gstin ? `GSTIN ${s.gstin}` : 'Not GST-registered'}{s.pan ? ` · PAN ${s.pan}` : ''}</p><p className="text-sm text-muted">Pickup: {s.pickupAddress.line1}, {s.pickupAddress.city}, {s.pickupAddress.state} {s.pickupAddress.pincode} · {s.contactPhone}</p><p className="text-sm mt-1">{s.description}</p><p className="text-xs text-muted mt-1">Owner {s.owner?.name} ({s.owner?.email}) · {s.listings} listings · {s.staff} team · applied {formatDate(s.createdAt)}</p></div>
-                <div className="flex flex-col items-end gap-1"><StatusBadge status={s.status} />{s.payablePaise != null && <span className="text-sm">Payable {formatMoney(s.payablePaise)}</span>}</div>
-              </div>
-              <div className="flex flex-wrap items-center gap-2 mt-4">
-                {s.status !== 'APPROVED' && <Button size="sm" onClick={() => act(s.id, { status: 'APPROVED' })}>Approve store</Button>}
-                {s.status === 'PENDING' && <ConfirmButton danger title="Reject application?" reason={{ label: 'Reason sent to the applicant' }} confirmLabel="Reject" onConfirm={(note) => act(s.id, { status: 'REJECTED', note })}>Reject</ConfirmButton>}
-                {s.status === 'APPROVED' && <ConfirmButton danger title="Suspend this store?" body="Its listings stop selling immediately." reason={{ label: 'Reason' }} confirmLabel="Suspend" onConfirm={(note) => act(s.id, { status: 'SUSPENDED', note })}>Suspend</ConfirmButton>}
-                {s.status === 'APPROVED' && <Link href={`/sellers/${s.slug}`} className="btn btn-ghost btn-sm">Storefront</Link>}
-                <span className="ml-auto text-sm">{s.payoutAccount ? <>Bank ••••{s.payoutAccount.accountLast4} · {s.payoutAccount.ifsc} {s.payoutAccount.verified ? <Badge tone="success">Verified</Badge> : canFinance ? <Button size="sm" variant="outline" onClick={() => act(s.id, { payoutVerified: true })}>Mark verified</Button> : <Badge tone="warning">Unverified</Badge>}</> : <span className="text-muted">No bank account</span>}</span>
-              </div>
-            </article>
-          ))}
-          {!d.sellers.length && <p className="text-muted">No sellers match.</p>}
-        </div>
-      )}</Loadable>
+    <Section title="Sellers" description="Approve stores after checking identity and tax details. Finance verifies bank accounts, sets commission overrides and can hold payouts.">
+      <DataTable tableId="sellers" query={list} rows={list.data?.sellers} columns={columns} onOpen={(s) => setOpen(s.id)} search="Store, legal name or GSTIN" dateFilter="Applied"
+        filters={[{ key: 'status', label: 'Status', options: [['PENDING', 'Applications'], ['APPROVED', 'Approved'], ['SUSPENDED', 'Suspended'], ['REJECTED', 'Rejected']] }, { key: 'hold', label: 'Payouts', options: [['yes', 'On hold']] }, { key: 'gst', label: 'GST', options: [['yes', 'GST-registered'], ['no', 'Not registered']] }]}
+        bulk={can('approvals.manage') ? { endpoint: '/admin/sellers/bulk', actions: [{ id: 'approve', label: 'Approve' }, { id: 'reject', label: 'Reject', danger: true, reason: 'required' }, { id: 'suspend', label: 'Suspend', danger: true, reason: 'required' }] } : undefined} />
+      {open && <SellerDrawer id={open} can={can} onClose={() => { setOpen(null); list.refetch(); }} />}
     </Section>
   );
 }
 
-// ───────────── Moderation ─────────────
-type ModProduct = { id: string; name: string; brand: string; category: string; status: string; description: string; highlights: string[]; hsnCode: string | null; images: string[]; specifications: { name: string; value: string }[]; listings: { id: string; variantLabel: string; seller: string; sku: string; pricePaise: number; mrpPaise: number; moq: number }[] };
-export function Moderation() {
-  const query = useQuery({ queryKey: ['admin', 'moderation'], queryFn: () => api<{ products: ModProduct[]; offers: { id: string; name: string; variantLabel: string; seller: string; sku: string; pricePaise: number; mrpPaise: number; image: string; stock: number }[] }>('/admin/moderation') });
-  const decide = async (kind: string, id: string, decision: string, note?: string) => { try { await post(`/admin/moderation/${kind}/${id}`, { decision, ...(note ? { note } : {}) }); toast.success(label(decision)); query.refetch(); } catch (e) { toast.error((e as Error).message); } };
-  const buttons = (kind: string, id: string) => (
-    <div className="flex flex-wrap gap-2">
-      <Button size="sm" onClick={() => decide(kind, id, 'APPROVED')}>Approve</Button>
-      <ConfirmButton title="Request changes" reason={{ label: 'What should the seller fix?' }} confirmLabel="Send" onConfirm={(note) => decide(kind, id, 'CHANGES_REQUESTED', note)}>Request changes</ConfirmButton>
-      <ConfirmButton danger title="Reject" reason={{ label: 'Reason' }} confirmLabel="Reject" onConfirm={(note) => decide(kind, id, 'REJECTED', note)}>Reject</ConfirmButton>
-    </div>
-  );
+function SellerDrawer({ id, can, onClose }: { id: string; can: Can; onClose: () => void }) {
+  const { data, refetch, error } = useQuery({ queryKey: ['admin', 'seller', id], queryFn: () => api<Seller360>(`/admin/sellers/${id}`) });
+  const [commission, setCommission] = useState<string | null>(null);
+  const s = data?.seller;
+  const act = async (body: object, msg = 'Saved') => { if (await attempt(() => patch(`/admin/sellers/${id}`, body), msg)) refetch(); };
+  const finance = can('finance.manage');
+  const p = data?.performance;
   return (
-    <Section title="Moderation" description="Check photos are genuine product photos, claims are accurate, HSN and category fit, and prices are honest (MRP ≥ price).">
-      <Loadable query={query}>{(d) => (
-        <div className="grid gap-6">
-          <section><h2 className="text-lg mb-3">New products ({d.products.length})</h2>
-            <div className="grid gap-4">{d.products.map((p) => (
-              <article key={p.id} className="card card-pad grid gap-4 md:grid-cols-[200px_1fr]">
-                <div className="grid grid-cols-3 md:grid-cols-2 gap-2 content-start">{p.images.map((u) => <span key={u} className="relative aspect-square rounded-lg bg-cream border border-line"><Image src={u} alt="" fill sizes="100px" className="object-contain p-1" unoptimized /></span>)}</div>
-                <div>
-                  <div className="flex flex-wrap items-center gap-2"><p className="font-semibold text-lg">{p.name}</p><StatusBadge status={p.status} /></div>
-                  <p className="text-sm text-muted">{p.brand} · {p.category} · HSN {p.hsnCode ?? 'missing'}</p>
-                  <p className="text-sm mt-2 whitespace-pre-line">{p.description}</p>
-                  {p.highlights.length > 0 && <ul className="text-sm list-disc pl-5 mt-2">{p.highlights.map((h) => <li key={h}>{h}</li>)}</ul>}
-                  {p.specifications.length > 0 && <p className="text-sm text-muted mt-2">{p.specifications.map((s) => `${s.name}: ${s.value}`).join(' · ')}</p>}
-                  <ul className="text-sm mt-2">{p.listings.map((l) => <li key={l.id}>{l.seller} · {l.variantLabel} · SKU {l.sku} · {formatMoney(l.pricePaise)} (MRP {formatMoney(l.mrpPaise)}) · MOQ {l.moq}</li>)}</ul>
-                  <div className="mt-3">{buttons('product', p.id)}</div>
-                </div>
-              </article>
-            ))}{!d.products.length && <p className="text-muted">No products waiting.</p>}</div>
-          </section>
-          <section><h2 className="text-lg mb-3">New offers on existing products ({d.offers.length})</h2>
-            <Table head={['Offer', 'Seller', 'Price', 'Stock', '']} empty={!d.offers.length}>{d.offers.map((o) => <tr key={o.id}><td>{o.name} · {o.variantLabel}<span className="block text-xs text-muted">SKU {o.sku}</span></td><td>{o.seller}</td><td>{formatMoney(o.pricePaise)} <span className="mrp text-xs">{formatMoney(o.mrpPaise)}</span></td><td>{o.stock}</td><td>{buttons('listing', o.id)}</td></tr>)}</Table>
-          </section>
-        </div>
-      )}</Loadable>
-    </Section>
-  );
-}
-
-// ───────────── Catalogue ─────────────
-type Cat = { id: string; name: string; slug: string; description: string | null; parentId: string | null; taxClassId: string | null; taxClass: { gstRateBps: number } | null; active: boolean; sortOrder: number; products: number; commissionBps: number | null };
-export function Categories({ canFinance }: { canFinance: boolean }) {
-  const query = useQuery({ queryKey: ['admin', 'categories'], queryFn: () => api<{ categories: Cat[]; taxClasses: { id: string; name: string; gstRateBps: number }[]; defaultCommissionBps: number }>('/admin/categories') });
-  const [edit, setEdit] = useState<Partial<Cat> & { commission?: string } | null>(null);
-  const save = async () => {
-    if (!edit) return;
-    const body = { name: edit.name, description: edit.description || null, parentId: edit.parentId || null, taxClassId: edit.taxClassId || null, active: edit.active ?? true, ...(canFinance ? { commissionBps: edit.commission ? Math.round(Number(edit.commission) * 100) : null } : {}) };
-    try { if (edit.id) await patch(`/admin/categories/${edit.id}`, body); else await post('/admin/categories', body); toast.success('Saved'); setEdit(null); query.refetch(); } catch (e) { toast.error((e as Error).message); }
-  };
-  return (
-    <Section title="Categories" description="Each category sets a default GST rate (a product’s HSN can override) and, optionally, its own commission." actions={<Button onClick={() => setEdit({ active: true })}>New category</Button>}>
-      <Loadable query={query}>{(d) => (
-        <>
-          <Table head={['Category', 'Parent', 'Default GST', 'Commission', 'Products', 'Status', '']}>
-            {d.categories.map((c) => <tr key={c.id}><td className="font-semibold">{c.name}<span className="block text-xs text-muted">{c.description}</span></td><td>{d.categories.find((p) => p.id === c.parentId)?.name ?? '—'}</td><td>{c.taxClass ? pct(c.taxClass.gstRateBps) : '18% (fallback)'}</td><td>{c.commissionBps != null ? pct(c.commissionBps) : `${pct(d.defaultCommissionBps)} (default)`}</td><td>{c.products}</td><td>{c.active ? <Badge tone="success">Visible</Badge> : <Badge tone="neutral">Hidden</Badge>}</td><td><Button size="sm" variant="outline" onClick={() => setEdit({ ...c, commission: c.commissionBps != null ? String(c.commissionBps / 100) : '' })}>Edit</Button></td></tr>)}
-          </Table>
-          <Modal open={!!edit} onOpenChange={(o) => !o && setEdit(null)} title={edit?.id ? 'Edit category' : 'New category'}>
-            {edit && <div className="grid gap-4">
-              <Field label="Name"><Input value={edit.name ?? ''} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></Field>
-              <Field label="Description"><Textarea rows={2} value={edit.description ?? ''} onChange={(e) => setEdit({ ...edit, description: e.target.value })} /></Field>
-              <Field label="Parent category"><Select value={edit.parentId ?? ''} onChange={(e) => setEdit({ ...edit, parentId: e.target.value || null })}><option value="">None (top level)</option>{d.categories.filter((c) => c.id !== edit.id && !c.parentId).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></Field>
-              <Field label="Default GST rate"><Select value={edit.taxClassId ?? ''} onChange={(e) => setEdit({ ...edit, taxClassId: e.target.value || null })}><option value="">Not set (18% fallback)</option>{d.taxClasses.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</Select></Field>
-              {canFinance && <Field label="Commission % (blank = default)"><Input inputMode="decimal" value={edit.commission ?? ''} onChange={(e) => setEdit({ ...edit, commission: e.target.value })} /></Field>}
-              <Checkbox checked={edit.active ?? true} onChange={(e) => setEdit({ ...edit, active: e.target.checked })} label="Visible to shoppers and sellers" />
-              <Button onClick={save}>Save</Button>
+    <Drawer open onClose={onClose} wide title={s?.name ?? 'Loading…'} subtitle={s ? `${s.legalName} · ${label(s.businessType)} · ${s.primaryCategory ?? 'No category'}` : undefined}
+      badges={s && <><StatusBadge status={s.status} />{s.gstRegistered ? <Badge tone="info">GSTIN {s.gstin}</Badge> : <Badge tone="neutral">Not GST-registered</Badge>}{s.payoutHold && <Badge tone="danger">Payouts on hold</Badge>}{s.commissionBps != null && <Badge tone="gold">Commission {pct(s.commissionBps)}</Badge>}{s.demo && <Badge tone="gold">Demo</Badge>}</>}
+      actions={s && can('approvals.manage') && <>
+        {s.status !== 'APPROVED' && <Button size="sm" onClick={() => act({ status: 'APPROVED' }, 'Store approved')}>Approve store</Button>}
+        {s.status === 'PENDING' && <ConfirmButton danger title="Reject application?" reason={{ label: 'Reason sent to the applicant' }} confirmLabel="Reject" onConfirm={(note) => act({ status: 'REJECTED', note })}>Reject</ConfirmButton>}
+        {s.status === 'APPROVED' && <ConfirmButton danger title="Suspend this store?" body="Its listings stop selling immediately." reason={{ label: 'Reason sent to the seller' }} confirmLabel="Suspend" onConfirm={(note) => act({ status: 'SUSPENDED', note })}>Suspend</ConfirmButton>}
+        <ActionButton label="Message" title="Message the seller" reason={false} confirmLabel="Send" fields={(st, set) => <>
+          <Field label="Type"><Select value={st.kind ?? 'INFO'} onChange={(e) => set({ kind: e.target.value })}><option value="INFO">Information</option><option value="WARNING">Formal warning (recorded)</option></Select></Field>
+          <Field label="Subject"><Input value={st.title ?? ''} onChange={(e) => set({ title: e.target.value })} /></Field>
+          <Field label="Message"><Textarea rows={4} value={st.body ?? ''} onChange={(e) => set({ body: e.target.value })} /></Field>
+        </>} onSubmit={(v) => post(`/admin/sellers/${id}/message`, { kind: v.kind ?? 'INFO', title: v.title, body: v.body }).then(() => refetch())} />
+        {s.status === 'APPROVED' && <Link href={`/sellers/${s.slug}`} className="btn btn-ghost btn-sm">View storefront</Link>}
+      </>}>
+      {error && <Alert>{(error as Error).message}</Alert>}
+      {data && s && p && <>
+        <MiniStats items={[
+          ['Parcels', p.parcels, `${p.delivered} delivered`], ['Cancellation rate', `${(p.cancelRate * 100).toFixed(1)}%`, `${p.cancelled} cancelled`],
+          ['Return rate', `${(p.returnRate * 100).toFixed(1)}%`, `${p.returns} returns`], ['Avg time to ship', p.avgHoursToShip == null ? '—' : `${p.avgHoursToShip.toFixed(1)} h`],
+          ['Rating', p.rating ? `${p.rating.average} ★` : '—', p.rating ? `${p.rating.count} reviews` : 'no reviews'], ['Live listings', p.listings.APPROVED ?? 0, `${p.listings.PENDING ?? 0} pending`],
+          ['Handling time', `${s.handlingDays} days`], ['Cash on delivery', s.codEnabled ? 'Allowed' : 'Off'],
+        ]} />
+        {data.money && (
+          <Panel title="Money" actions={<Link href={`/admin/finance?store=${id}`} className="text-xs text-forest font-semibold">Ledger →</Link>}>
+            <KV cols={3} items={[['Sales', formatMoney(data.money.salesPaise)], ['Delivery collected', formatMoney(data.money.shippingPaise)], ['Commission', formatMoney(data.money.commissionPaise)], ['Refunds', formatMoney(data.money.refundsPaise)], ['Paid out', formatMoney(data.money.paidOutPaise)], ['Payable now', <strong key="p">{formatMoney(data.money.payablePaise)}</strong>]]} />
+            {data.money.payouts.length > 0 && <ul className="mt-3 grid gap-1 text-sm">{data.money.payouts.map((x) => <li key={x.id} className="flex justify-between"><span>{formatDate(x.createdAt)} · <span className="font-mono text-xs">{x.providerRef}</span></span><strong>{formatMoney(x.amountPaise)}</strong></li>)}</ul>}
+          </Panel>
+        )}
+        <Panel title="Finance controls">
+          <div className="grid gap-4">
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="text-sm flex-1 min-w-48"><p className="font-semibold">Commission</p><p className="text-muted">{s.commissionBps == null ? 'Uses the category rule or the platform default.' : `Fixed at ${pct(s.commissionBps)} for this seller, overriding category rules.`}</p></div>
+              {finance && (commission === null
+                ? <Button size="sm" variant="outline" onClick={() => setCommission(s.commissionBps == null ? '' : String(s.commissionBps / 100))}>Change</Button>
+                : <div className="flex items-end gap-2"><Field label="Commission % (blank = default)"><Input className="w-28" inputMode="decimal" value={commission} onChange={(e) => setCommission(e.target.value)} /></Field><Button size="sm" onClick={async () => { await act({ commissionBps: commission === '' ? null : Math.round(Number(commission) * 100) }, 'Commission updated'); setCommission(null); }}>Save</Button><Button size="sm" variant="ghost" onClick={() => setCommission(null)}>Cancel</Button></div>)}
+            </div>
+            <div className="flex flex-wrap items-center gap-3 border-t border-line pt-3">
+              <div className="text-sm flex-1 min-w-48"><p className="font-semibold">Payouts</p><p className="text-muted">{s.payoutHold ? `On hold: ${s.payoutHoldReason}` : 'Normal. Payouts can be recorded from Settlements.'}</p></div>
+              {finance && (s.payoutHold
+                ? <ConfirmButton title="Release the payout hold?" body="The seller is told payouts will resume." confirmLabel="Release hold" onConfirm={() => act({ payoutHold: false, payoutHoldReason: null }, 'Hold released')}>Release hold</ConfirmButton>
+                : <ConfirmButton danger title="Hold this seller’s payouts?" body="No payout can be recorded until the hold is released. The seller is told why." reason={{ label: 'Reason (sent to the seller)' }} confirmLabel="Hold payouts" onConfirm={(reason) => act({ payoutHold: true, payoutHoldReason: reason }, 'Payouts held')}>Hold payouts</ConfirmButton>)}
+            </div>
+            <div className="flex flex-wrap items-center gap-3 border-t border-line pt-3">
+              <div className="text-sm flex-1 min-w-48"><p className="font-semibold">Bank account</p><p className="text-muted">{s.payoutAccount ? `${s.payoutAccount.accountHolder} · ••••${s.payoutAccount.accountLast4} · ${s.payoutAccount.ifsc}${s.payoutAccount.bankName ? ` · ${s.payoutAccount.bankName}` : ''}` : 'Not added yet.'}</p></div>
+              {s.payoutAccount && (s.payoutAccount.verified ? <Badge tone="success">Verified</Badge> : finance ? <ConfirmButton title="Mark the bank account verified?" body="Only after a penny-drop test or a cancelled-cheque check." confirmLabel="Mark verified" onConfirm={() => act({ payoutVerified: true }, 'Bank account verified')}>Mark verified</ConfirmButton> : <Badge tone="warning">Unverified</Badge>)}
+            </div>
+            {can('approvals.manage') && <div className="flex flex-wrap items-center gap-4 border-t border-line pt-3 text-sm">
+              <Checkbox checked={s.codEnabled} onChange={(e) => act({ codEnabled: e.target.checked }, e.target.checked ? 'COD allowed' : 'COD switched off')} label="Allow cash on delivery" />
+              <label className="flex items-center gap-2">Handling days<select className="input min-h-[34px] py-0.5 w-auto" value={s.handlingDays} onChange={(e) => act({ handlingDays: Number(e.target.value) })}>{[0, 1, 2, 3, 4, 5, 7, 10].map((n) => <option key={n}>{n}</option>)}</select></label>
             </div>}
-          </Modal>
-        </>
-      )}</Loadable>
-    </Section>
+          </div>
+        </Panel>
+        <Panel title="Details">
+          <KV items={[['GSTIN', s.gstin], ['PAN', s.pan], ['Phone', s.contactPhone], ['Pickup address', `${s.pickupAddress.line1}, ${s.pickupAddress.city}, ${s.pickupAddress.state} ${s.pickupAddress.pincode}`], ['Applied', formatDate(s.createdAt)], ['About', s.description]]} />
+        </Panel>
+        <Panel title="Team"><ul className="grid gap-1.5 text-sm">{data.team.map((m) => <li key={m.id} className="flex justify-between"><Link href={`/admin/customers?open=${m.id}`} className="hover:underline">{m.name} <span className="text-muted">{m.email}</span></Link><Badge tone="neutral">{label(m.role)}</Badge></li>)}</ul></Panel>
+        <Panel title="Recent parcels" actions={<Link href={`/admin/orders?store=${id}`} className="text-xs text-forest font-semibold">All orders →</Link>}>
+          {data.recentParcels.length ? <Table head={['Order', 'Date', 'Payment', 'Status', 'Total']}>{data.recentParcels.map((x) => <tr key={x.id}><td><Link href={`/admin/orders?open=${x.orderId}`} className="font-semibold hover:underline">{x.orderNumber}</Link></td><td>{formatDate(x.createdAt)}</td><td>{label(x.paymentMethod)}</td><td><StatusBadge status={x.status} /></td><td className="font-semibold">{formatMoney(x.totalPaise)}</td></tr>)}</Table> : <p className="text-sm text-muted">No parcels yet.</p>}
+        </Panel>
+        <NotesPanel entityType="store" entityId={id} initial={data.notes} />
+        <Panel title="Activity"><Timeline items={data.activity.map((a) => ({ id: a.id, title: label(a.action.replace(/[.-]/g, '_')), at: a.createdAt, note: typeof a.metadata?.note === 'string' ? a.metadata.note : typeof a.metadata?.body === 'string' ? a.metadata.body : undefined }))} /></Panel>
+      </>}
+    </Drawer>
   );
 }
-
-export function Brands() {
-  const query = useQuery({ queryKey: ['admin', 'brands'], queryFn: () => api<{ brands: { id: string; name: string; verified: boolean; products: number }[] }>('/admin/brands') });
-  return (
-    <Section title="Brands" description="Mark a brand verified only after checking trademark ownership or authorised-reseller documents.">
-      <Loadable query={query}>{(d) => (
-        <Table head={['Brand', 'Products', 'Verified', '']} empty={!d.brands.length}>{d.brands.map((b) => <tr key={b.id}><td className="font-semibold">{b.name}</td><td>{b.products}</td><td>{b.verified ? <Badge tone="success">Verified</Badge> : <Badge tone="neutral">No</Badge>}</td><td><Button size="sm" variant="outline" onClick={async () => { await patch(`/admin/brands/${b.id}`, { verified: !b.verified }); query.refetch(); }}>{b.verified ? 'Remove badge' : 'Mark verified'}</Button></td></tr>)}</Table>
-      )}</Loadable>
-    </Section>
-  );
-}
-
-export function Products() {
-  const [status, setStatus] = useState('');
-  const list = useAdminList<{ products: { id: string; slug: string; name: string; brand: string; category: string; status: string; featured: boolean; demo: boolean; image: string | null; variants: number; updatedAt: string }[]; page: number; pages: number }>('/admin/products', 'products', { status });
-  const act = async (id: string, body: object) => { try { await patch(`/admin/products/${id}`, body); list.refetch(); } catch (e) { toast.error((e as Error).message); } };
-  return (
-    <Section title="Products" description="Feature products on the homepage, or pause a product page across every seller." actions={<><Select aria-label="Status" className="min-h-[40px] py-1 w-auto" value={status} onChange={(e) => setStatus(e.target.value)}><option value="">All</option><option value="APPROVED">Live</option><option value="PENDING">Pending</option><option value="PAUSED">Paused</option><option value="REJECTED">Rejected</option></Select><SearchInput value={list.q} onChange={list.setQ} placeholder="Product or brand" /></>}>
-      <Loadable query={list}>{(d) => (
-        <>
-          <Table head={['', 'Product', 'Category', 'Status', 'Homepage', '']} empty={!d.products.length}>
-            {d.products.map((p) => <tr key={p.id}><td>{p.image && <Image src={p.image} alt="" width={40} height={40} className="size-10 rounded bg-cream object-contain" unoptimized />}</td><td><p className="font-semibold">{p.name}</p><p className="text-xs text-muted">{p.brand} · {p.variants} variant(s){p.demo ? ' · demo' : ''}</p></td><td>{p.category}</td><td><StatusBadge status={p.status} /></td><td>{p.status === 'APPROVED' && <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="checkbox mt-0" checked={p.featured} onChange={(e) => act(p.id, { featured: e.target.checked })} />Featured</label>}</td>
-              <td>{p.status === 'APPROVED' ? <ConfirmButton danger title="Pause this product?" body="It disappears from the storefront for every seller." confirmLabel="Pause" onConfirm={() => act(p.id, { status: 'PAUSED', featured: false })}>Pause</ConfirmButton> : p.status === 'PAUSED' ? <Button size="sm" variant="outline" onClick={() => act(p.id, { status: 'APPROVED' })}>Resume</Button> : null}</td></tr>)}
-          </Table>
-          <Pager data={d} setPage={list.setPage} />
-        </>
-      )}</Loadable>
-    </Section>
-  );
-}
-
-export function Inventory() {
-  const [all, setAll] = useState(false);
-  const query = useQuery({ queryKey: ['admin', 'inventory', all], queryFn: () => api<{ lowStockThreshold: number; items: { id: string; sku: string; name: string; variant: string; seller: string; onHand: number; reserved: number; available: number }[] }>(`/admin/inventory${all ? '?all=true' : ''}`) });
-  return (
-    <Section title="Inventory overview" description="Live listings by available stock (on hand minus units held for unpaid orders)." actions={<label className="flex items-center gap-2 text-sm"><input type="checkbox" className="checkbox mt-0" checked={all} onChange={(e) => setAll(e.target.checked)} />Show all, not only low stock</label>}>
-      <Loadable query={query}>{(d) => (
-        <Table head={['Product', 'Seller', 'SKU', 'On hand', 'Held', 'Available']} empty={!d.items.length}>{d.items.map((i) => <tr key={i.id}><td>{i.name} · {i.variant}</td><td>{i.seller}</td><td>{i.sku}</td><td>{i.onHand}</td><td>{i.reserved}</td><td className={Number(i.available) <= d.lowStockThreshold ? 'text-warning font-semibold' : ''}>{i.available}</td></tr>)}</Table>
-      )}</Loadable>
-    </Section>
-  );
-}
-

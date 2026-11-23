@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { formatDate } from '@/lib/format';
 
 /** Daily bar chart with a hover/focus readout and a hidden data table for screen readers. */
-export function DailyBars({ data, value, format, label }: { data: { date: string }[]; value: (d: never) => number; format: (n: number) => string; label: string }) {
+export function DailyBars({ data, value, format, label, period = 'last 30 days' }: { data: { date: string }[]; value: (d: never) => number; format: (n: number) => string; label: string; period?: string }) {
   const values = data.map((d) => value(d as never));
   const max = Math.max(1, ...values);
   const [active, setActive] = useState<number | null>(null);
@@ -12,7 +12,7 @@ export function DailyBars({ data, value, format, label }: { data: { date: string
   return (
     <figure>
       <figcaption className="flex items-baseline justify-between gap-3 mb-3">
-        <span className="text-sm text-muted">{label} · last 30 days</span>
+        <span className="text-sm text-muted">{label} · {period}</span>
         <span className="text-sm"><strong>{format(values[shown] ?? 0)}</strong> <span className="text-muted">on {formatDate(data[shown]?.date, { day: 'numeric', month: 'short' })}</span> · total {format(total)}</span>
       </figcaption>
       <div className="flex items-end gap-[3px] h-40" onMouseLeave={() => setActive(null)} aria-hidden>

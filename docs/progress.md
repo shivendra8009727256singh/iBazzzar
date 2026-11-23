@@ -1,5 +1,28 @@
 # IBazzzar progress
 
+## 2026-11-23 (evening) — Step A: admin console
+
+"Super Admin" is now called **Admin** everywhere: `npm run admin:create` (`scripts/create-admin.mjs`), `/admin/login`,
+`ADMIN_NAME` / `ADMIN_EMAIL` / `ADMIN_PASSWORD` in `.env`. The rules are unchanged: only the script creates it, nobody can be
+made Admin from the console, and the first account is never promoted.
+
+| Part | What was added |
+| --- | --- |
+| A1 Tables | One table component for every list: search, filters, India-time date range with presets, sortable columns, 25/50/100 rows, column chooser (remembered per browser), CSV export of exactly the filtered list (up to 10,000 rows), row selection with bulk actions. All state lives in the URL, so views can be shared and survive reloads. |
+| A2 360 views | Drawers for Customer 360 (spend, orders, addresses, tickets, sessions, activity), Business 360 (credit used and available, team, POs, RFQs), Seller 360 (cancellation and return rate, dispatch time, rating, money, parcels), Order 360 (parcels, payments, refunds, returns, history), Product 360 (offers with stock, sales, reviews). Internal staff notes on all five. Global search (press `/`) across orders, people, sellers, businesses, products/SKUs, tickets and coupons. |
+| A3 Actions | Every action asks for a reason and is audited. Orders: cancel unpaid (single or bulk), pack/ship/cancel a parcel for the seller, same-state address change before shipping, message the customer (app + email), staff refund capped at what's still refundable, credit-terms payment, bank-transfer confirmation. People: edit, confirm email, unlock, sign out everywhere, suspend/restore (bulk too). Sellers: approve/reject/suspend (bulk), message or formal warning, commission override, payout hold (blocks payouts), bank verification, COD and handling days. Businesses: approve/reject/suspend (bulk), credit terms **and credit limit** (enforced at checkout). Catalogue: admin edits that stay live, photo order/removal, merge duplicate products, bulk approve/reject/pause/feature, offer price/status changes and stock corrections with seller notification, category create/edit/reorder/delete-when-empty, tax classes, brand create/rename/verify/merge/delete-when-empty, review hide/publish. Coupons: full edit (code locked once used), delete only if unused, usage and discount stats, bulk. Deals: edit and delete. **Permissions:** the Admin can switch each capability on or off for Operations, Finance and Support; managing staff stays Admin-only. |
+| A4 Analytics | Any date range compared with the previous period of the same length; all / B2C / B2B; sales, orders, average order, units, new vs returning customers, cancellation rate, returns, refunds, commission; daily sales; sales by category and state; seller performance; top, most-returned, low-stock and never-sold products; top customers; payment mix, failed online attempts and never-paid online orders; GST summary by HSN; settlement statement; B2B funnel (RFQ → quote → accepted → PO → ordered). Download as an Excel workbook (one sheet per section), any section as CSV, or print to PDF. Demo and unpaid orders are always excluded. Visitor conversion is shown as unavailable: it needs storefront visit tracking and is never estimated. |
+
+Database: migration `202611240001_admin_console` (additive: seller `commissionBps` / `payoutHold`, business
+`creditLimitPaise`, `admin_notes` table, two CHECK constraints). Applied to the local dev database. **Not yet applied to
+Aiven**: run `npm run db:migrate` with the Aiven `DATABASE_URL` before deploying this build there.
+
+Verification: `npm test` 113/113 (20 new in `tests/admin-console.test.js`, migration drift check passes), lint clean,
+typecheck clean, `npm run build` passes, `npm run test:e2e` 13/13 including a new console journey (URL-synced table state,
+Order 360 drawer, analytics channel switch, global search, permission matrix, no console errors).
+
+Not done in this step: the OpenAPI file (`docs/api/openapi.yaml`) doesn't list the new admin endpoints yet.
+
 ## 2026-11-23 (later) — sign-in fix and Admin model
 
 - **Fixed:** signing in worked on the server but the browser then got 401s on `/api/auth/me`, `/api/notifications` and

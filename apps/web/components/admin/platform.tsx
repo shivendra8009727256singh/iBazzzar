@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Download, ImagePlus } from 'lucide-react';
@@ -9,7 +10,7 @@ import type { Ticket } from '@/lib/types';
 import { cn, formatDate, formatDateTime, formatMoney, rupeesToPaise } from '@/lib/format';
 import { SupportThread } from '../support-thread';
 import { Alert, Badge, Button, ConfirmButton, Field, Input, Select, StatusBadge, Textarea, Checkbox } from '../ui';
-import { Loadable, Pager, SearchInput, Section, Table, useAdminList } from './kit';
+import { DataTable, Loadable, Pager, Section, Table, useAdminList, useAdminTable, type Column, type ListResponse } from './kit';
 
 // ───────────── Homepage CMS ─────────────
 type CmsData = {
@@ -174,16 +175,22 @@ export function Reports({ caps }: { caps: string[] }) {
   );
 }
 
+type AuditEntry = { id: string; actor: string; actorId: string | null; action: string; entityType: string; entityId: string; metadata: Record<string, unknown>; ip: string | null; createdAt: string };
+const ENTITY_LINKS: Record<string, string> = { user: 'customers', organization: 'organizations', store: 'sellers', order: 'orders', catalog_product: 'products', product: 'products' };
 export function Audit() {
-  const list = useAdminList<{ entries: { id: string; actor: string; action: string; entityType: string; entityId: string; metadata: Record<string, unknown>; ip: string | null; createdAt: string }[]; page: number; pages: number }>('/admin/audit', 'audit');
+  const list = useAdminTable<ListResponse & { entries: AuditEntry[] }>('/admin/audit', ['action', 'entityType', 'entityId', 'actor']);
+  const columns: Column<AuditEntry>[] = [
+    { key: 'when', label: 'When', sort: 'newest', render: (e) => <span className="whitespace-nowrap text-sm">{formatDateTime(e.createdAt)}</span> },
+    { key: 'who', label: 'Who', render: (e) => e.actor },
+    { key: 'action', label: 'Action', always: true, render: (e) => <span className="font-mono text-xs">{e.action}</span> },
+    { key: 'record', label: 'Record', render: (e) => ENTITY_LINKS[e.entityType] && /^[0-9a-f-]{36}$/.test(e.entityId) ? <Link className="text-xs hover:underline" href={`/admin/${ENTITY_LINKS[e.entityType]}?open=${e.entityId}`}>{e.entityType} {e.entityId.slice(0, 8)}</Link> : <span className="text-xs">{e.entityType} {e.entityId.slice(0, 12)}</span> },
+    { key: 'details', label: 'Details', render: (e) => <span className="text-xs text-muted block max-w-sm truncate" title={JSON.stringify(e.metadata)}>{Object.keys(e.metadata ?? {}).length ? JSON.stringify(e.metadata) : ''}</span> },
+    { key: 'ip', label: 'IP', hidden: true, render: (e) => <span className="font-mono text-xs">{e.ip ?? '—'}</span> },
+  ];
   return (
-    <Section title="Audit log" description="Append-only record of sign-ins, approvals, money movements, role changes and content edits." actions={<SearchInput value={list.q} onChange={list.setQ} placeholder="Action or record id" />}>
-      <Loadable query={list}>{(d) => (
-        <>
-          <Table head={['When', 'Who', 'Action', 'Record', 'Details']} empty={!d.entries.length}>{d.entries.map((e) => <tr key={e.id}><td className="whitespace-nowrap text-sm">{formatDateTime(e.createdAt)}</td><td>{e.actor}</td><td className="font-mono text-xs">{e.action}</td><td className="text-xs">{e.entityType} {e.entityId.slice(0, 12)}</td><td className="text-xs text-muted max-w-xs truncate">{Object.keys(e.metadata ?? {}).length ? JSON.stringify(e.metadata) : ''}{e.ip ? ` · ${e.ip}` : ''}</td></tr>)}</Table>
-          <Pager data={d} setPage={list.setPage} />
-        </>
-      )}</Loadable>
+    <Section title="Audit log" description="Append-only record of sign-ins, approvals, money movements, role changes and content edits. Export the filtered view for compliance.">
+      <DataTable tableId="audit" query={list} rows={list.data?.entries} columns={columns} search="Action or record id"
+        filters={[{ key: 'action', label: 'Area', options: [['user.signed-in', 'Sign-ins'], ['admin.', 'Admin sign-ins'], ['user.', 'People'], ['fulfilment', 'Fulfilment'], ['listing', 'Listings'], ['category', 'Categories'], ['brand', 'Brands'], ['store', 'Sellers'], ['organization', 'Businesses'], ['order', 'Orders'], ['refund', 'Refunds'], ['payout', 'Payouts'], ['product', 'Products'], ['coupon', 'Coupons'], ['permissions', 'Permissions'], ['settings', 'Settings'], ['report', 'Exports']] }]} />
     </Section>
   );
 }

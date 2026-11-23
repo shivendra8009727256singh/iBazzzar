@@ -134,10 +134,58 @@ test('the Admin signs in only on its own page; a stale legacy cookie does not br
   const origin = new URL(page.url()).origin;
   expect((await page.request.post('/api/cart/merge', { data: { items: [], mode: 'RETAIL' }, headers: { Origin: origin } })).status()).toBe(200);
   expect((await page.request.post('/api/cart/merge', { data: { items: [], mode: 'RETAIL' } })).status()).toBe(403);
-  for (const [path, heading] of [['orders', 'Orders'], ['moderation', 'Moderation'], ['finance', 'Commissions & settlements'], ['cms', 'Homepage & content'], ['settings', 'Platform settings'], ['audit', 'Audit log'], ['staff', 'Staff roles']]) {
+  for (const [path, heading] of [['orders', 'Orders'], ['moderation', 'Moderation'], ['finance', 'Commissions & settlements'], ['cms', 'Homepage & content'], ['settings', 'Platform settings'], ['audit', 'Audit log'], ['staff', 'Staff and permissions'], ['analytics', 'Analytics'], ['customers', 'People'], ['products', 'Products'], ['categories', 'Categories and GST'], ['coupons', 'Coupons'], ['reviews', 'Reviews']]) {
     await page.goto(`/admin/${path}`);
     await expect(page.getByRole('heading', { level: 1, name: heading })).toBeVisible();
   }
+});
+
+test('the admin console: URL-synced tables, Order 360, analytics, search and permissions', async ({ page }) => {
+  const errors = [];
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  await page.goto('/admin/login');
+  await page.getByRole('textbox', { name: 'Email', exact: true }).fill(process.env.ADMIN_EMAIL);
+  await page.locator('input[autocomplete="current-password"]').fill(process.env.ADMIN_PASSWORD);
+  await page.getByRole('button', { name: /Sign in to the console/ }).click();
+  await expect(page.getByRole('heading', { name: 'Marketplace overview' })).toBeVisible();
+
+  // Tables keep their state in the address bar: page size and sort survive a reload.
+  await page.goto('/admin/products');
+  await expect(page.getByRole('heading', { level: 1, name: 'Products' })).toBeVisible();
+  await page.getByLabel('Rows').selectOption('50');
+  await expect(page).toHaveURL(/limit=50/);
+  await page.getByRole('button', { name: 'Product', exact: true }).click();
+  await expect(page).toHaveURL(/sort=name/);
+  await page.reload();
+  await expect(page.getByLabel('Rows')).toHaveValue('50');
+  await expect(page.getByRole('link', { name: /Export CSV/ })).toHaveAttribute('href', /format=csv/);
+
+  // Order 360 opens in a drawer from the table and is linkable.
+  await page.goto('/admin/orders');
+  await page.getByRole('button', { name: 'Open' }).first().click();
+  await expect(page.getByRole('dialog').getByRole('heading', { name: /^Order / })).toBeVisible();
+  await expect(page).toHaveURL(/open=/);
+  await expect(page.getByRole('dialog').getByText('Internal notes')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page).not.toHaveURL(/open=/);
+
+  // Analytics compares with the previous period and switches channel.
+  await page.goto('/admin/analytics');
+  await expect(page.getByText('Average order')).toBeVisible();
+  await expect(page.getByText(/Visitor conversion rate: not available/)).toBeVisible();
+  await page.getByRole('tab', { name: 'B2B business' }).click();
+  await expect(page).toHaveURL(/mode=BUSINESS/);
+  await expect(page.getByRole('heading', { name: 'B2B funnel' })).toBeVisible();
+
+  // Global search finds demo products from anywhere.
+  await page.getByLabel('Search the console').fill('headphones');
+  await expect(page.getByRole('link', { name: /Aura wireless headphones/ }).first()).toBeVisible();
+
+  // Only the Admin edits permissions; the matrix is shown with the Admin column locked.
+  await page.goto('/admin/staff');
+  await expect(page.getByRole('heading', { name: 'What each role can do' })).toBeVisible();
+  await expect(page.getByRole('checkbox', { name: 'Support agent: Answer support tickets' })).toBeChecked();
+  expect(errors, errors.join(' | ')).toEqual([]);
 });
 
 test('a shopper signing in normally lands in their account, with no console errors', async ({ page }) => {

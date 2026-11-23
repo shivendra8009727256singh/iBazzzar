@@ -21,7 +21,8 @@ export async function notesFor(prisma, entityType, entityId) {
 
 export function registerAdminPeople(app, { prisma }) {
   app.get('/api/admin/meta', (req, res) => {
-    if (!req.user || !req.staffRoles.length) throw new DomainError('Staff access required', 403);
+    if (!req.user) throw new DomainError('Please sign in to continue', 401);
+    if (!req.staffRoles.length) throw new DomainError('Staff access required', 403);
     res.json({ roles: req.staffRoles, capabilities: req.capabilities, labels: Object.fromEntries(Object.entries(staffRoles).map(([k, v]) => [k, v.label])) });
   });
 
