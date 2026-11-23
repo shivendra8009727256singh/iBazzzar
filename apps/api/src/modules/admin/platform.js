@@ -78,7 +78,11 @@ export function registerAdminPlatform(app, { prisma, storage }) {
     imageUrl: z.string().max(300), alt: z.string().trim().min(3).max(150), link: internalLink.nullable().optional(),
     startsAt: z.iso.datetime().nullable().optional(), endsAt: z.iso.datetime().nullable().optional(), sortOrder: z.number().int().min(0).max(100).default(0), active: z.boolean().default(true),
   });
-  const bannerData = (b) => ({ ...b, startsAt: b.startsAt ? new Date(b.startsAt) : null, endsAt: b.endsAt ? new Date(b.endsAt) : null });
+  const bannerData = (b) => ({
+    ...b,
+    ...('startsAt' in b ? { startsAt: b.startsAt ? new Date(b.startsAt) : null } : {}),
+    ...('endsAt' in b ? { endsAt: b.endsAt ? new Date(b.endsAt) : null } : {}),
+  });
   app.post('/api/admin/banners', cms, async (req, res) => {
     const banner = await prisma.banner.create({ data: bannerData(bannerInput.parse(req.body)) });
     await audit(prisma, { actorId: req.user.id, action: 'banner.created', entityType: 'banner', entityId: banner.id });
@@ -86,7 +90,10 @@ export function registerAdminPlatform(app, { prisma, storage }) {
   });
   app.patch('/api/admin/banners/:id', cms, async (req, res) => {
     const id = uuid.parse(req.params.id);
-    const banner = await prisma.banner.update({ where: { id }, data: bannerData(bannerInput.partial().parse(req.body)) });
+    const parsed = bannerInput.partial().parse(req.body);
+    // Only fields actually sent are changed; schema defaults must not reset the others.
+    for (const k of Object.keys(parsed)) if (!(k in (req.body ?? {}))) delete parsed[k];
+    const banner = await prisma.banner.update({ where: { id }, data: bannerData(parsed) });
     await audit(prisma, { actorId: req.user.id, action: 'banner.updated', entityType: 'banner', entityId: id });
     res.json({ banner });
   });

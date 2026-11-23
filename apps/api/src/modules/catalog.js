@@ -63,7 +63,7 @@ export function registerCatalog(app, { prisma }) {
     const slug = String(req.params.slug).slice(0, 120);
     const variant = await prisma.productVariant.findUnique({ where: { slug }, select: { id: true, catalogProductId: true } });
     const product = await prisma.catalogProduct.findFirst({
-      where: { status: 'APPROVED', ...(variant ? { id: variant.catalogProductId } : { slug }) },
+      where: { status: 'APPROVED', ...(variant ? { id: variant.catalogProductId } : /^[0-9a-f-]{36}$/.test(slug) ? { id: slug } : { slug }) },
       include: {
         brand: true, category: { include: { parent: true } }, media: { orderBy: { sortOrder: 'asc' } },
         attributes: { include: { attribute: true } }, variants: { orderBy: { sortOrder: 'asc' } },

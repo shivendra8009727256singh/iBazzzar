@@ -62,6 +62,15 @@ export const addressSchema = postalAddressSchema.extend({
   isDefault: z.boolean().default(false),
 });
 
+/** Edits have no defaults, so an omitted field is left unchanged instead of being reset. */
+export const addressPatchSchema = postalAddressSchema.extend({
+  name: z.string().trim().min(2).max(100),
+  phone: mobileSchema,
+  label: z.string().trim().min(2).max(30),
+  gstin: gstinSchema,
+  isDefault: z.boolean(),
+}).partial();
+
 // ───────────── Accounts ─────────────
 
 export const businessTypes = ['PROPRIETORSHIP', 'PARTNERSHIP', 'LLP', 'PRIVATE_LIMITED', 'PUBLIC_LIMITED', 'ONE_PERSON_COMPANY', 'TRUST_SOCIETY', 'OTHER'];
@@ -134,6 +143,7 @@ export const cartQuoteSchema = z.object({
   couponCode: couponCode.optional(),
   pincode: pincodeSchema.optional(),
   state: stateSchema.optional(),
+  paymentMethod: z.enum(['ONLINE', 'COD', 'BANK_TRANSFER']).optional(),
 });
 export const cartItemSchema = z.object({ listingId: uuid, quantity: z.number().int().min(0).max(10000), savedForLater: z.boolean().optional() });
 export const cartMergeSchema = z.object({ items: z.array(cartLineSchema).max(100), mode: modeSchema.optional() });

@@ -1,16 +1,42 @@
 'use client';
+import { useEffect } from 'react';
 import Link from 'next/link';
-import {useState,type ReactNode,type FormEvent} from 'react';
-import {useQueryClient} from '@tanstack/react-query';
-import {usePathname,useRouter} from 'next/navigation';
-import {ArrowUpRight,LogOut} from 'lucide-react';
-import {post} from '@/lib/api';
-import {useUser,useShop} from './providers';
-import {isStaff} from '@ibazzzar/shared';
+import { usePathname, useRouter } from 'next/navigation';
+import type { LucideIcon } from 'lucide-react';
+import { cn } from '@/lib/format';
+import type { User } from '@/lib/types';
+import { useSession } from './providers';
+import { Spinner } from './ui';
 
-export const field=(form:FormData,name:string)=>String(form.get(name)||'').trim();
-export const paise=(form:FormData,name:string)=>Math.round(Number(form.get(name))*100);
-export function WorkspaceShell({children,title}:{children:ReactNode;title:string}){const {data:user,isPending}=useUser(),client=useQueryClient(),router=useRouter(),path=usePathname();if(isPending)return <div className="container section">Opening your workspace…</div>;if(!user)return <section className="container empty"><h1>A space that’s yours.</h1><p>Sign in to open your {title.toLowerCase()}.</p><Link href={`/login?portal=${path.startsWith("/seller")?"seller":path.startsWith("/business")?"business":path.startsWith("/admin")||path.startsWith("/support")?"staff":"shopper"}&next=${encodeURIComponent(path)}`} className="button primary">Sign in or create an account</Link></section>;
- const links=[['/account','Account & orders'],['/wishlist','Saved discoveries'],['/business','Business workspace'],['/seller','Seller workspace'],...(isStaff(user.role)?[['/admin','Admin console']]:[])];
- return <section className="container section workspace"><aside className="workspace-nav"><span className="eyebrow">HELLO, {user.name.split(' ')[0].toUpperCase()}</span>{links.map(([href,name])=><Link key={href} href={href} className={path.startsWith(href)?'active':''} aria-current={path.startsWith(href)?'page':undefined}>{name}</Link>)}<Link href="/products">Back to the mall <ArrowUpRight size={12}/></Link><button className="text-link" onClick={async()=>{await post('/auth/logout',{});client.setQueryData(['user'],null);client.clear();router.push('/login');}}><LogOut size={14}/> Sign out</button></aside><div className="workspace-body">{children}</div></section>;}
-export function ActionForm({children,onSubmit,label='Save',className='',reset=false,variant='primary'}:{children:ReactNode;onSubmit:(form:FormData)=>Promise<unknown>;label?:string;className?:string;reset?:boolean;variant?:'primary'|'outline'}){const [busy,setBusy]=useState(false),[error,setError]=useState(''),shop=useShop();return <form className={`form-stack ${className}`} onSubmit={async(e:FormEvent<HTMLFormElement>)=>{e.preventDefault();const form=e.currentTarget;setBusy(true);setError('');try{await onSubmit(new FormData(form));if(reset)form.reset();shop.notify('Saved successfully');}catch(err){setError((err as Error).message);}finally{setBusy(false);}}}>{children}{error&&<div className="error" role="alert">{error}</div>}<button className={`button ${variant}`} disabled={busy}>{busy?'Saving…':label}</button></form>;}
+export type NavItem = { href: string; label: string; icon: LucideIcon; exact?: boolean; badge?: number };
+
+/** Signed-in area with a side menu (desktop) and a scrollable tab row (mobile). Pages still rely on the API for access control. */
+export function WorkspaceShell({ title, nav, children, header, gate }: { title: string; nav: NavItem[]; children: React.ReactNode; header?: React.ReactNode; gate?: (u: User) => React.ReactNode | null }) {
+  const { user, loading } = useSession();
+  const router = useRouter();
+  const pathname = usePathname();
+  useEffect(() => { if (!loading && !user) router.replace(`/login?next=${encodeURIComponent(pathname)}`); }, [loading, user, router, pathname]);
+  if (loading || !user) return <Spinner label="Checking your session" />;
+  const blocked = gate?.(user);
+  const active = (n: NavItem) => (n.exact ? pathname === n.href : pathname === n.href || pathname.startsWith(`${n.href}/`));
+  return (
+    <div className="container-page py-6 md:py-8">
+      {header}
+      <div className="grid gap-6 lg:grid-cols-[230px_1fr]">
+        <aside aria-label={`${title} menu`}>
+          <p className="hidden lg:block eyebrow mb-3">{title}</p>
+          <nav className="flex lg:flex-col gap-1 overflow-x-auto -mx-4 px-4 lg:mx-0 lg:px-0 pb-2 lg:pb-0 lg:sticky lg:top-28">
+            {nav.map((n) => (
+              <Link key={n.href} href={n.href} aria-current={active(n) ? 'page' : undefined}
+                className={cn('flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-[14.5px] font-medium whitespace-nowrap transition', active(n) ? 'bg-emerald text-white' : 'text-ink hover:bg-mint')}>
+                <n.icon size={17} className={active(n) ? 'text-gold-light' : 'text-forest'} />{n.label}
+                {!!n.badge && <span className={cn('ml-auto rounded-full px-1.5 text-[11px] font-bold', active(n) ? 'bg-gold-light text-deep' : 'bg-gold/20 text-gold-ink')}>{n.badge}</span>}
+              </Link>
+            ))}
+          </nav>
+        </aside>
+        <section className="min-w-0">{blocked ?? children}</section>
+      </div>
+    </div>
+  );
+}

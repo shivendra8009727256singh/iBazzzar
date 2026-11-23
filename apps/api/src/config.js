@@ -1,5 +1,10 @@
 // Runtime configuration, validated once at start-up. Unsafe production combinations stop the process early.
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
+
+const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -9,6 +14,7 @@ const schema = z.object({
   DATABASE_URL: z.string().min(10, 'DATABASE_URL is required'),
   DATABASE_SSL_REJECT_UNAUTHORIZED: z.enum(['true', 'false']).default('true'),
   DATABASE_CA_CERT: z.string().optional(),
+  DATABASE_CA_CERT_FILE: z.string().optional(),
   REDIS_URL: z.string().optional(),
   TRUST_PROXY: z.coerce.number().int().min(0).max(5).default(0),
   APP_ENCRYPTION_KEY: z.string().regex(/^[0-9a-f]{64}$/i, 'APP_ENCRYPTION_KEY must be 64 hex characters (32 bytes)').optional(),
@@ -59,7 +65,11 @@ export function loadConfig(env = process.env) {
     host: e.HOST,
     origin: e.WEB_ORIGIN,
     databaseUrl: e.DATABASE_URL,
-    databaseSsl: { rejectUnauthorized: e.DATABASE_SSL_REJECT_UNAUTHORIZED === 'true', ca: e.DATABASE_CA_CERT },
+    databaseSsl: {
+      rejectUnauthorized: e.DATABASE_SSL_REJECT_UNAUTHORIZED === 'true',
+      // Managed databases such as Aiven sign with their own CA: point DATABASE_CA_CERT_FILE at the downloaded ca.pem.
+      ca: e.DATABASE_CA_CERT || (e.DATABASE_CA_CERT_FILE ? readFileSync(resolve(ROOT, e.DATABASE_CA_CERT_FILE), 'utf8') : undefined),
+    },
     redisUrl: e.REDIS_URL,
     trustProxy: e.TRUST_PROXY,
     // A fixed development key keeps local data readable across restarts; production must supply its own.

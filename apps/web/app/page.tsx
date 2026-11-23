@@ -1,32 +1,239 @@
-import Link from 'next/link';
 import Image from 'next/image';
-import {ArrowUpRight,ArrowRight,Headphones,Shirt,ShoppingBasket,Armchair,Sparkles,BriefcaseBusiness,ShieldCheck,Package,Store,Check,Search,Layers,Truck,Sofa,Wrench,Car,Dumbbell,Puzzle,Watch,Lock,RotateCcw,MapPinned,Headset,Star} from 'lucide-react';
-import {serverApi} from '@/lib/api';
-import type {Product,Offer,Review,Seller} from '@/lib/types';
-import {OfferCards} from '@/components/offers';
-import {ProductCard} from '@/components/product-card';
-import {Newsletter} from '@/components/newsletter';
-export const dynamic='force-dynamic';
-const departments=[['Electronics','Plug into possibility.',Headphones],['Fashion','Find your own expression.',Shirt],['Grocery','Good things, every day.',ShoppingBasket],['Home & Living','Make yourself at home.',Armchair],['Beauty','Your kind of self-care.',Sparkles],['Office','Ideas start here.',BriefcaseBusiness],['Furniture','Room to live well.',Sofa],['Industrial','Built for the work.',Wrench],['Automotive','For the road ahead.',Car],['Sports','Keep moving.',Dumbbell],['Toys','Curiosity, unboxed.',Puzzle],['Smart Gadgets','Clever, connected.',Watch]] as const;
-const safe=async<T,>(path:string,fallback:T)=>{try{return await serverApi<T>(path);}catch{return fallback;}};
-export default async function Home(){let products:Product[]=[];let unavailable=false;try{products=(await serverApi<{products:Product[]}>('/products')).products;}catch{unavailable=true;}
- const [{offers},{sellers},{reviews},{sections}]=await Promise.all([safe<{offers:Offer[]}>('/offers',{offers:[]}),safe<{sellers:Seller[]}>('/sellers',{sellers:[]}),safe<{reviews:Review[]}>('/reviews/recent',{reviews:[]}),safe<{sections:{id:string;heading:string;body:string}[]}>('/cms',{sections:[]})]);
- const announcement=sections.find(s=>s.id==='announcement'),hero=sections.find(s=>s.id==='hero');
- // Admin-featured listings lead the discovery edit; the rest follow in catalogue order.
- const edit=[...products].sort((a,b)=>Number(!!b.featured)-Number(!!a.featured)).slice(0,4);
- return <>
- <section className="hero"><Image src="/images/mall-concept.webp" alt="Futuristic emerald mall with an ivory robot concierge — brand concept illustration" fill priority sizes="100vw" className="hero-image"/><div className="hero-shade"/><div className="container hero-content"><div className="hero-eyebrow"><span/> YOUR WORLD. ONE INTELLIGENT MALL.</div>{hero?<><h1>{hero.heading}</h1><p>{hero.body}</p></>:<><h1>Welcome to the<br/>future of <em>shopping.</em></h1><p>Everyday discoveries. Extraordinary possibilities.<br/>Shop for yourself or source for your business —<br className="desktop-break"/> all in one thoughtfully connected marketplace.</p></>}<div className="hero-actions"><Link href="/products" className="button gold">Explore products <ArrowUpRight size={18}/></Link><Link href="/wholesale" className="button light-outline">Shop wholesale <ArrowRight size={17}/></Link></div><div className="hero-foot"><span>PERSONAL SHOPPING</span><i/> <span>BUSINESS SOURCING</span><i/> <span>ENDLESS DISCOVERY</span></div></div><div className="hero-caption">A vision of tomorrow · AI-generated brand concept</div><div className="hero-index">01 <span>/</span> A NEW WAY TO SHOP</div></section>
- {announcement&&<aside className="announcement" aria-label="Announcement"><div className="container"><strong>{announcement.heading}</strong> <span>{announcement.body}</span></div></aside>}
- <div className="benefit-strip"><div className="container benefits"><div><Layers/><span>One mall. Many possibilities.<small>Everyday finds to business essentials</small></span></div><div><Store/><span>Meet independent sellers<small>Discover the people behind your finds</small></span></div><div><ShieldCheck/><span>Clarity at every step<small>Visible prices. Clear order details.</small></span></div><div><Package/><span>Retail meets wholesale<small>A little for you. More for your business.</small></span></div></div></div>
- <section className="container section departments-section"><div className="section-heading"><div><span className="eyebrow">A WORLD OF POSSIBILITIES</span><h2>Find your next favourite.</h2></div><Link href="/products" className="text-link">Explore all departments <ArrowUpRight size={16}/></Link></div><div className="department-grid">{departments.map(([name,copy,Icon],i)=><Link href={`/products?category=${encodeURIComponent(name)}`} className={`department-card tone-${i}`} key={name}><span className="department-number">0{i+1}</span><Icon className="department-icon" strokeWidth={1.1}/><div><h3>{name}</h3><p>{copy}</p></div><ArrowUpRight className="department-arrow" size={18}/></Link>)}</div></section>
- <section className="container shopping-paths"><Link href="/products" className="path-card personal"><div><span className="eyebrow">FOR YOUR EVERYDAY</span><h2>Little finds.<br/>Big possibilities.</h2><p>Explore things you’ll love to live with.</p><span className="text-link">Shop for yourself <ArrowUpRight size={17}/></span></div><Image src="/products/bag.svg" width={290} height={290} alt="Illustrative canvas tote"/></Link><Link href="/wholesale" className="path-card business"><div><span className="eyebrow">FOR YOUR NEXT CHAPTER</span><h2>Good business<br/>starts here.</h2><p>Source smarter. Build something bigger.</p><span className="text-link">Buy for your business <ArrowUpRight size={17}/></span></div><div className="business-art"><span/><span/><span/><BriefcaseBusiness size={65} strokeWidth={1}/></div></Link></section>
- <section className="container section"><div className="section-heading"><div><span className="eyebrow">THE DISCOVERY EDIT</span><h2>Thoughtfully picked. Ready to explore.</h2></div><Link href="/products" className="text-link">View the collection <ArrowUpRight size={16}/></Link></div><div className="collection-tabs"><span className="active">The everyday edit</span><Link href="/products?category=Home%20%26%20Living">For your home</Link><Link href="/products?category=Electronics">Tech & essentials</Link><Link href="/wholesale">Business picks</Link><small>Demo catalogue · Product illustrations</small></div>{unavailable?<div className="notice">The catalogue service is offline. Start the API to explore products.</div>:<div className="product-grid">{edit.map(p=><ProductCard key={p.id} product={p}/>)}</div>}</section>
-{offers.length>0&&<section className="container section" id="offers"><div className="section-heading"><div><span className="eyebrow">LIVE OFFERS</span><h2>Deals with clear terms.</h2></div><Link href="/deals" className="text-link">All offers <ArrowUpRight size={16}/></Link></div><OfferCards offers={offers.slice(0,3)}/></section>}
- <section className="story-band"><div className="container story-layout"><div><span className="eyebrow">A MORE CONNECTED EXPERIENCE</span><h2>From your first find<br/>to your next favourite.</h2><p>A considered journey, with you at the centre.<br/>Our vision for a more intelligent digital mall.</p><Link href="/help" className="text-link">Get to know IBazzzar <ArrowUpRight size={16}/></Link></div><div className="journey">{[[Search,'Discover','Find something that feels right.'],[Layers,'Compare','Clear details. Confident choices.'],[ShoppingBasket,'Order','Your essentials, in one bag.'],[Truck,'Follow along','Order updates in your account.']].map(([Icon,title,desc],i)=>{const I=Icon as typeof Search;return <div key={String(title)}><span className="step-number">0{i+1}</span><I size={24} strokeWidth={1.4}/><h3>{String(title)}</h3><p>{String(desc)}</p></div>;})}</div></div></section>
- <section className="container section wholesale-feature"><div className="wholesale-visual"><Image src="/images/mall-concept.webp" alt="Robotic mall concept detail" fill sizes="(max-width:768px) 100vw, 45vw"/><span>THE FUTURE, THOUGHTFULLY IMAGINED.</span></div><div className="wholesale-copy"><span className="eyebrow">IBAZZZAR FOR BUSINESS</span><h2>Smarter sourcing.<br/><em>Bigger possibilities.</em></h2><p>Bring your business shopping into one place. Connect with sellers, explore quantity pricing, and turn your requirements into conversations.</p><div className="wholesale-benefits">{['Transparent bulk pricing','Request & compare quotations','Purchase order approvals','Your business, organised'].map(s=><span key={s}><Check size={17}/>{s}</span>)}</div><Link href="/wholesale" className="button primary">Explore wholesale <ArrowUpRight size={17}/></Link><Link href="/business" className="text-link">Request a quote <ArrowRight size={16}/></Link></div></section>
-{sellers.length>0&&<section className="container section"><div className="section-heading"><div><span className="eyebrow">MEET THE SELLERS</span><h2>Stores approved by our marketplace team.</h2></div><Link href="/brands" className="text-link">All brands & sellers <ArrowUpRight size={16}/></Link></div><div className="seller-grid">{sellers.slice(0,4).map(s=><Link key={s.id} href={`/products?seller=${s.id}`} className="seller-tile"><Store size={26} strokeWidth={1.3}/><h3>{s.name}</h3><p>{s.description}</p><span className="text-link">Visit store <ArrowUpRight size={14}/></span></Link>)}</div></section>}
- <section className="container seller-banner"><div><span className="eyebrow">A NEW HOME FOR YOUR BUSINESS</span><h2>Your store. A bigger marketplace.</h2><p>Connect with individual shoppers and business buyers, all in one place.</p></div><Link href="/sell" className="button gold">Become a seller <ArrowUpRight size={17}/></Link></section>
- <section className="trust-band"><div className="container"><span className="eyebrow">SHOP WITH CLARITY</span><h2>What you can count on today.</h2><div className="trust-grid">{[[Lock,'Secure sessions & payments','Card details never touch our servers. Payments run through Razorpay once configured.'],[RotateCcw,'Clear returns','Request a return from your order after delivery. The seller reviews it and refunds are tracked.'],[MapPinned,'Order tracking','Every order keeps a status history, including the carrier your seller ships with.'],[Store,'Visible sellers','Each product names the approved seller who fulfils it.'],[Headset,'Real support tickets','Raise a ticket from your account and follow every reply in one thread.']].map(([Icon,title,copy])=>{const I=Icon as typeof Lock;return <div key={String(title)}><I size={24} strokeWidth={1.4}/><h3>{String(title)}</h3><p>{String(copy)}</p></div>;})}</div></div></section>
- <section className="container section"><div className="section-heading"><div><span className="eyebrow">VERIFIED REVIEWS</span><h2>Words from real customers.</h2></div></div>{reviews.length?<div className="review-grid">{reviews.slice(0,3).map(r=><article key={r.id} className="review-card"><span className="stars" aria-label={`${r.rating} out of 5`}>{[1,2,3,4,5].map(i=><Star key={i} size={14} fill={i<=r.rating?'currentColor':'none'}/>)}</span><h3>{r.title}</h3><p>{r.body}</p><small>{r.authorName} · Verified purchase{r.productSlug&&<> · <Link href={`/products/${r.productSlug}`}>{r.productName}</Link></>}</small></article>)}</div>:<p className="notice">No reviews yet. We only publish reviews from customers whose orders were delivered — never invented testimonials.</p>}</section>
- <Newsletter/>
- </>;}
+import Link from 'next/link';
+import {
+  ArrowRight, ShoppingBag, Building2, Cpu, Shirt, Apple, Sofa, Sparkles, Armchair, Wrench, PenTool, Car, Dumbbell, Puzzle, Watch,
+  ShieldCheck, RotateCcw, Truck, Store, Headphones, BadgeCheck, FileText, Layers, ClipboardList, Users, Receipt, LayoutGrid,
+} from 'lucide-react';
+import { tryServerApi } from '@/lib/server-api';
+import type { Category, Product, Review } from '@/lib/types';
+import { ProductRails, Countdown, CommerceStory, Reveal } from '@/components/home-parts';
+import { ProductGrid } from '@/components/product-card';
+import { Stars, Badge } from '@/components/ui';
+
+export const revalidate = 60;
+
+type Home = {
+  rails: { trending: Product[]; bestSellers: Product[]; newArrivals: Product[]; topRated: Product[]; deals: Product[] };
+  sections: Record<string, { heading: string; body: string; data: { ctaLabel?: string; ctaLink?: string } }>;
+  sellers: { id: string; slug: string; name: string; description: string; primaryCategory: string | null }[];
+};
+type Deals = { deals: { id: string; name: string; description: string; discountBps: number; startsAt: string; endsAt: string; live: boolean; products: Product[] }[] };
+
+const ICONS: Record<string, typeof Cpu> = {
+  electronics: Cpu, fashion: Shirt, grocery: Apple, 'home-and-living': Sofa, 'beauty-and-personal-care': Sparkles, furniture: Armchair,
+  'industrial-supplies': Wrench, 'office-supplies': PenTool, automotive: Car, sports: Dumbbell, toys: Puzzle, 'smart-gadgets': Watch,
+};
+
+export default async function HomePage() {
+  const [home, cats, deals, reviews] = await Promise.all([
+    tryServerApi<Home>('/home', { revalidate: 60 }),
+    tryServerApi<{ categories: Category[] }>('/categories', { revalidate: 300 }),
+    tryServerApi<Deals>('/deals', { revalidate: 60 }),
+    tryServerApi<{ reviews: Review[] }>('/reviews/recent', { revalidate: 300 }),
+  ]);
+  const hero = home?.sections.hero;
+  const announcement = home?.sections.announcement;
+  const wholesale = home?.sections.wholesale;
+  const sell = home?.sections.sell;
+  const categories = (cats?.categories ?? []).filter((c) => !c.parentId);
+  const liveDeal = deals?.deals[0];
+
+  return (
+    <>
+      {announcement && (
+        <div className="bg-ivory border-b border-line text-center text-[14px] py-2 px-4">
+          <strong className="text-emerald">{announcement.heading}</strong> <span className="text-muted">— {announcement.body}</span>
+          {announcement.data.ctaLink && <Link href={announcement.data.ctaLink} className="link ml-2">{announcement.data.ctaLabel ?? 'Learn more'}</Link>}
+        </div>
+      )}
+
+      {/* Hero */}
+      <section className="relative overflow-hidden surface-emerald">
+        <Image src="/images/mall-concept.webp" alt="" fill priority sizes="100vw" className="object-cover object-[70%_center] opacity-90" />
+        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(6,30,22,.96)_0%,rgba(6,30,22,.86)_38%,rgba(6,30,22,.25)_70%,rgba(6,30,22,.05)_100%)] max-md:bg-[linear-gradient(180deg,rgba(6,30,22,.55)_0%,rgba(6,30,22,.92)_65%)]" />
+        <div className="relative container-page min-h-[560px] md:min-h-[600px] flex items-end md:items-center pb-12 md:pb-0">
+          <div className="max-w-xl animate-fade-up pt-48 md:pt-0">
+            <span className="eyebrow text-gold-light!">Intelligent Digital Mall</span>
+            <h1 className="mt-3 text-[38px] leading-[1.08] md:text-[60px] text-white">{hero?.heading ?? 'Welcome to the Future of Shopping'}</h1>
+            <p className="mt-5 text-[17px] md:text-lg text-white/80 max-w-lg">{hero?.body ?? 'Discover everything you love, connect with sellers, and shop for yourself or your business — all in one intelligent digital mall.'}</p>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Link href={hero?.data.ctaLink ?? '/products'} className="btn btn-gold btn-lg">{hero?.data.ctaLabel ?? 'Explore Products'}<ArrowRight size={18} /></Link>
+              <Link href="/wholesale" className="btn btn-on-dark btn-lg">Shop Wholesale</Link>
+            </div>
+            <Link href="/sell" className="inline-block mt-5 text-[14px] text-white/75 hover:text-white underline-offset-4 hover:underline">Have products to sell? Become a Seller →</Link>
+            <p className="mt-8 text-[11.5px] text-white/45">Illustration: a concept of IBazzzar’s robotic digital mall, not a photograph of a real facility.</p>
+          </div>
+        </div>
+      </section>
+
+      {/* Personal vs business */}
+      <section className="container-page -mt-10 relative z-10 grid gap-4 md:grid-cols-2">
+        {[
+          { icon: ShoppingBag, title: 'Shop for Yourself', body: 'Everyday essentials and treats across every department, with genuine offers and secure checkout.', points: ['Everyday essentials', 'Multi-category shopping', 'Retail offers', 'Secure checkout'], href: '/products', cta: 'Start shopping' },
+          { icon: Building2, title: 'Buy for Your Business', body: 'Wholesale prices, MOQ-based tiers, quotations and purchase orders with approvals for your team.', points: ['Wholesale catalogue', 'Bulk prices & MOQ', 'Request quotations', 'Business procurement'], href: '/wholesale', cta: 'Explore wholesale', dark: true },
+        ].map((c) => (
+          <Link key={c.title} href={c.href} className={`group card card-pad flex flex-col gap-3 transition hover:-translate-y-0.5 hover:shadow-lift ${c.dark ? 'surface-emerald border-transparent' : ''}`}>
+            <span className={`size-12 rounded-2xl grid place-items-center ${c.dark ? 'bg-gold-light/15 text-gold-light' : 'bg-mint text-forest'}`}><c.icon size={24} /></span>
+            <h2 className={`text-2xl md:text-[28px] ${c.dark ? 'text-white' : ''}`}>{c.title}</h2>
+            <p className={c.dark ? 'text-white/75' : 'text-muted'}>{c.body}</p>
+            <ul className="grid grid-cols-2 gap-1.5 text-[14px]">
+              {c.points.map((p) => <li key={p} className="flex items-center gap-2"><BadgeCheck size={15} className={c.dark ? 'text-gold-light' : 'text-forest'} />{p}</li>)}
+            </ul>
+            <span className={`mt-auto pt-2 font-semibold inline-flex items-center gap-2 ${c.dark ? 'text-gold-light' : 'text-forest'}`}>{c.cta}<ArrowRight size={16} className="transition group-hover:translate-x-1" /></span>
+          </Link>
+        ))}
+      </section>
+
+      {/* Departments */}
+      <section className="container-page py-16">
+        <div className="flex items-end justify-between gap-4 mb-7">
+          <div><span className="eyebrow">Department explorer</span><h2 className="text-3xl md:text-4xl mt-1">Every floor of the mall</h2></div>
+          <Link href="/products" className="link hidden sm:inline">All products →</Link>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          {categories.map((c, i) => {
+            const Icon = ICONS[c.slug] ?? LayoutGrid;
+            return (
+              <Reveal key={c.id} delay={Math.min(i, 8) * 0.03}>
+                <Link href={`/products?category=${c.slug}`} className="group relative flex h-full flex-col rounded-2xl border border-line bg-gradient-to-br from-cream to-white p-4 transition hover:border-gold hover:shadow-lift">
+                  <span className="size-12 rounded-xl bg-emerald text-gold-light grid place-items-center transition group-hover:scale-105"><Icon size={22} /></span>
+                  <p className="mt-4 font-semibold leading-tight">{c.name}</p>
+                  <p className="text-[12.5px] text-muted mt-1">{c.products ? `${c.products} product${c.products === 1 ? '' : 's'}` : 'Coming soon'}</p>
+                  <ArrowRight size={16} className="absolute right-4 top-5 text-gold opacity-0 -translate-x-1 transition group-hover:opacity-100 group-hover:translate-x-0" />
+                </Link>
+              </Reveal>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Products */}
+      <section className="container-page pb-16">
+        <div className="flex items-end justify-between gap-4 mb-2">
+          <div><span className="eyebrow">Fresh from the floor</span><h2 className="text-3xl md:text-4xl mt-1">Picked for you</h2></div>
+          <Link href="/products" className="link hidden sm:inline">Shop all →</Link>
+        </div>
+        {home ? <ProductRails rails={home.rails} /> : <p className="text-muted py-10">Products will appear here once the catalogue is available.</p>}
+      </section>
+
+      {/* Commerce story */}
+      <section className="surface-emerald py-16 md:py-20">
+        <div className="container-page">
+          <div className="max-w-2xl mb-10">
+            <span className="eyebrow text-gold-light!">How IBazzzar works</span>
+            <h2 className="text-3xl md:text-[42px] text-white mt-2">From discovery to your doorstep</h2>
+            <p className="text-white/70 mt-3">Our robotic mall is a design concept. What’s real is the process: transparent prices, independent sellers, and every parcel tracked.</p>
+          </div>
+          <CommerceStory />
+        </div>
+      </section>
+
+      {/* Wholesale hub */}
+      <section className="container-page py-16">
+        <div className="grid gap-8 lg:grid-cols-2 items-center rounded-3xl border border-line bg-ivory p-6 md:p-12">
+          <div>
+            <span className="eyebrow">B2B wholesale hub</span>
+            <h2 className="text-3xl md:text-[40px] mt-2">{wholesale?.heading ?? 'Smarter Sourcing for Every Business'}</h2>
+            <p className="text-muted mt-3 text-[17px]">{wholesale?.body}</p>
+            <div className="mt-7 flex flex-wrap gap-3">
+              <Link href="/wholesale" className="btn btn-primary btn-lg">Explore Wholesale<ArrowRight size={18} /></Link>
+              <Link href="/business/rfqs/new" className="btn btn-outline btn-lg">Request a Quote</Link>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {[[Layers, 'Bulk catalogue', 'Wholesale-enabled listings from approved sellers'], [Receipt, 'MOQ pricing', 'Tiered prices that drop as quantity grows'], [ClipboardList, 'Request for quotation', 'Ask several sellers, compare and negotiate'], [FileText, 'Purchase orders', 'Approval limits and separation of duties'], [Users, 'Team accounts', 'Owners, buyers and approvers'], [BadgeCheck, 'GST invoices', 'Seller-issued invoices with your GSTIN']].map(([Icon, t, b]) => {
+              const I = Icon as typeof Layers;
+              return <div key={t as string} className="rounded-2xl bg-white border border-line p-4"><I size={20} className="text-gold-ink" /><p className="font-semibold mt-2 text-[15px]">{t as string}</p><p className="text-[13px] text-muted mt-0.5">{b as string}</p></div>;
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* Flash deals */}
+      {liveDeal && (
+        <section className="container-page pb-16">
+          <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
+            <div>
+              <span className="eyebrow">{liveDeal.live ? 'Live now' : 'Coming up'}</span>
+              <h2 className="text-3xl md:text-4xl mt-1">{liveDeal.name}</h2>
+              <p className="text-muted mt-1">{liveDeal.description} · {Math.round(liveDeal.discountBps / 100)}% off selected items</p>
+            </div>
+            <span className="badge badge-danger text-sm py-1.5 px-3"><Countdown endsAt={liveDeal.endsAt} startsAt={liveDeal.live ? undefined : liveDeal.startsAt} /></span>
+          </div>
+          <ProductGrid products={liveDeal.products.slice(0, 4)} />
+          <div className="mt-6 text-center"><Link href="/deals" className="btn btn-outline">See all deals</Link></div>
+        </section>
+      )}
+
+      {/* Sellers */}
+      {home?.sellers.length ? (
+        <section className="container-page pb-16">
+          <div className="flex items-end justify-between gap-4 mb-6">
+            <div><span className="eyebrow">Featured stores</span><h2 className="text-3xl md:text-4xl mt-1">Approved by our marketplace team</h2></div>
+            <Link href="/sellers" className="link hidden sm:inline">All stores →</Link>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {home.sellers.map((s) => (
+              <Link key={s.id} href={`/sellers/${s.slug}`} className="card card-pad flex gap-4 hover:shadow-lift transition">
+                <span className="size-12 shrink-0 rounded-xl bg-emerald text-gold-light grid place-items-center font-display text-xl">{s.name.charAt(0)}</span>
+                <div className="min-w-0">
+                  <p className="font-semibold flex items-center gap-1.5">{s.name}<BadgeCheck size={16} className="text-forest" aria-label="Approved store" /></p>
+                  {s.primaryCategory && <p className="text-[13px] text-gold-ink">{s.primaryCategory}</p>}
+                  <p className="text-[14px] text-muted mt-1 line-clamp-2">{s.description}</p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {/* Sell */}
+      <section className="container-page pb-16">
+        <div className="surface-emerald rounded-3xl p-6 md:p-12 grid gap-8 md:grid-cols-[1.4fr_1fr] items-center">
+          <div>
+            <span className="eyebrow text-gold-light!">Sell on IBazzzar</span>
+            <h2 className="text-3xl md:text-[40px] text-white mt-2">{sell?.heading ?? 'Your Store. A Bigger Marketplace.'}</h2>
+            <p className="text-white/75 mt-3 text-[17px]">{sell?.body}</p>
+            <Link href="/sell" className="btn btn-gold btn-lg mt-7">Become a Seller<ArrowRight size={18} /></Link>
+          </div>
+          <ul className="grid gap-3 text-white/85">
+            {['Retail and wholesale from one catalogue', 'Inventory, orders and returns in one hub', 'Quote on business RFQs', 'Clear commission and settlement ledger'].map((t) => (
+              <li key={t} className="flex items-center gap-3 rounded-xl bg-white/[0.06] border border-white/10 px-4 py-3"><Store size={18} className="text-gold-light shrink-0" />{t}</li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
+      {/* Trust */}
+      <section className="container-page pb-16">
+        <span className="eyebrow">What you can count on</span>
+        <h2 className="text-3xl md:text-4xl mt-1 mb-6">Clear policies, no fine-print surprises</h2>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          {[[ShieldCheck, 'Secure payments', 'Paid through Razorpay. We never see or store card numbers.', '/pages/payments'], [RotateCcw, 'Clear returns', 'Return window shown before you buy; refunds tracked in your account.', '/pages/returns'], [Truck, 'Order tracking', 'Every parcel has a tracking timeline in your order page.', '/account/orders'], [Store, 'Seller information', 'Every product names the seller who ships and invoices it.', '/sellers'], [Headphones, 'Customer support', 'Raise a request and follow every reply in one place.', '/support']].map(([Icon, t, b, h]) => {
+            const I = Icon as typeof ShieldCheck;
+            return <Link key={t as string} href={h as string} className="rounded-2xl border border-line p-5 hover:border-gold transition"><I size={22} className="text-forest" /><p className="font-semibold mt-3">{t as string}</p><p className="text-[14px] text-muted mt-1">{b as string}</p></Link>;
+          })}
+        </div>
+      </section>
+
+      {/* Reviews */}
+      <section className="container-page pb-8">
+        <span className="eyebrow">Verified reviews</span>
+        <h2 className="text-3xl md:text-4xl mt-1 mb-6">From customers who received their orders</h2>
+        {reviews?.reviews.length ? (
+          <div className="grid gap-4 md:grid-cols-3">
+            {reviews.reviews.slice(0, 3).map((r) => (
+              <figure key={r.id} className="card card-pad">
+                <Stars value={r.rating} />
+                <blockquote className="mt-3"><p className="font-semibold">{r.title}</p><p className="text-muted mt-1 text-[15px] line-clamp-4">{r.body}</p></blockquote>
+                <figcaption className="mt-4 text-[13px] text-muted">{r.authorName} · <Badge tone="success">Verified purchase</Badge>{r.productSlug && <> · <Link href={`/products/${r.productSlug}`} className="link">{r.productName}</Link></>}</figcaption>
+              </figure>
+            ))}
+          </div>
+        ) : (
+          <p className="panel p-6 text-muted">Reviews appear here only from customers whose order was delivered. We never publish invented testimonials.</p>
+        )}
+      </section>
+    </>
+  );
+}

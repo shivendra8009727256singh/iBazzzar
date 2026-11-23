@@ -1,7 +1,66 @@
-import Image from 'next/image';
-import {Logo} from '@/components/logo';
-import {LoginForm,type Portal} from '@/components/auth/login-form';
-export const metadata={title:'Sign in'};
-const panels:Record<Portal,[string,string,string]>={shopper:['A WORLD WAITING TO BE DISCOVERED','Your everyday. Reimagined.','From thoughtful little finds to your next big business idea.'],business:['IBAZZZAR FOR BUSINESS','Smarter sourcing.','Quotations, approvals and purchase orders in one place.'],seller:['SELLER HUB','Your store. A bigger marketplace.','Reach shoppers and business buyers across India.'],staff:['MARKETPLACE OPERATIONS','Run the mall.','Moderation, support and finance for the IBazzzar team.']};
-export default async function Page({searchParams}:{searchParams:Promise<{portal?:string;next?:string}>}){const {portal,next}=await searchParams;const p=(portal&&portal in panels?portal:'shopper') as Portal;const [eyebrow,title,copy]=panels[p];
- return <div className="auth-layout"><section className="auth-brand"><Image src="/images/mall-concept.webp" alt="" fill sizes="50vw"/><div><div className="logo-plate"><Logo size="hero"/></div><span className="eyebrow" style={{color:'#dcc58e'}}>{eyebrow}</span><h1>{title}</h1><p>{copy}</p></div></section><div className="auth-form"><LoginForm initialPortal={p} next={next??null}/></div></div>;}
+'use client';
+import { Suspense, useState } from 'react';
+import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
+import { Eye, EyeOff } from 'lucide-react';
+import { post } from '@/lib/api';
+import type { User } from '@/lib/types';
+import { AuthShell } from '@/components/auth-shell';
+import { Alert, Button, Field, Input, useFormErrors } from '@/components/ui';
+
+function safeNext(next: string | null) {
+  return next && next.startsWith('/') && !next.startsWith('//') ? next : null;
+}
+
+function LoginForm() {
+  const router = useRouter();
+  const params = useSearchParams();
+  const qc = useQueryClient();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [show, setShow] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const errors = useFormErrors();
+  const portal = params.get('portal');
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true); errors.clear();
+    try {
+      const { user } = await post<{ user: User }>('/auth/login', { email, password });
+      qc.setQueryData(['me'], user);
+      await qc.invalidateQueries();
+      const next = safeNext(params.get('next'));
+      router.push(next ?? (portal === 'staff' && user.staffRole ? '/admin' : portal === 'seller' && user.stores.length ? '/seller' : portal === 'business' && user.organizations.length ? '/business' : '/account'));
+      router.refresh();
+    } catch (err) { errors.set(err); setBusy(false); }
+  };
+
+  return (
+    <AuthShell title={portal === 'staff' ? 'Staff sign in' : 'Welcome back'} subtitle={<>New to IBazzzar? <Link href="/register" className="link">Create an account</Link></>}>
+      <div className="flex gap-1 mb-6 text-sm" role="tablist" aria-label="Sign in as">
+        {[[null, 'Shopper'], ['business', 'Business'], ['seller', 'Seller'], ['staff', 'Staff']].map(([p, l]) => (
+          <Link key={l} href={p ? `/login?portal=${p}` : '/login'} role="tab" aria-selected={portal === p} className={`rounded-lg px-3 py-1.5 font-semibold ${portal === p ? 'bg-emerald text-white' : 'bg-mint text-forest'}`}>{l}</Link>
+        ))}
+      </div>
+      <form onSubmit={submit} className="grid gap-4" noValidate>
+        {errors.message && <Alert>{errors.message}</Alert>}
+        <Field label="Email" required error={errors.field('email')}><Input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></Field>
+        <Field label="Password" required error={errors.field('password')}>
+          <div className="relative">
+            <Input type={show ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required className="pr-12" />
+            <button type="button" onClick={() => setShow(!show)} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-muted" aria-label={show ? 'Hide password' : 'Show password'}>{show ? <EyeOff size={18} /> : <Eye size={18} />}</button>
+          </div>
+        </Field>
+        <div className="flex justify-end -mt-1"><Link href="/reset-password" className="link text-sm">Forgot password?</Link></div>
+        <Button size="lg" loading={busy}>Sign in</Button>
+        <p className="text-[13px] text-muted">After 5 wrong attempts the account is locked for 15 minutes to protect it.</p>
+      </form>
+    </AuthShell>
+  );
+}
+
+export default function LoginPage() {
+  return <Suspense><LoginForm /></Suspense>;
+}

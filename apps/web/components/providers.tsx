@@ -1,20 +1,153 @@
 'use client';
-import {createContext,useContext,useEffect,useState,type ReactNode} from 'react';
-import {QueryClient,QueryClientProvider,useQuery} from '@tanstack/react-query';
-import {api} from '@/lib/api';
-import type {CartItem,Product,User} from '@/lib/types';
-type Shop={cart:CartItem[];wishlist:string[];mode:'retail'|'business';ready:boolean;setMode:(mode:'retail'|'business')=>void;add:(p:Product,quantity?:number)=>void;quantity:(id:string,n:number)=>void;clear:()=>void;wish:(id:string)=>void;notify:(s:string)=>void;saved:CartItem[];saveForLater:(id:string)=>void;moveToBag:(id:string)=>void;removeSaved:(id:string)=>void};
-const Context=createContext<Shop|null>(null);
-export const useShop=()=>useContext(Context)!;
-export const useUser=()=>useQuery({queryKey:['user'],queryFn:()=>api<{user:User}>('/auth/me').then(d=>d.user),retry:false,staleTime:30_000});
-export function Providers({children}:{children:ReactNode}){
- const [client]=useState(()=>new QueryClient({defaultOptions:{queries:{retry:1,refetchOnWindowFocus:false}}}));
- const [cart,setCart]=useState<CartItem[]>([]),[wishlist,setWishlist]=useState<string[]>([]),[mode,setMode]=useState<'retail'|'business'>('retail'),[ready,setReady]=useState(false),[message,setMessage]=useState(''),[saved,setSaved]=useState<CartItem[]>([]);
- useEffect(()=>{try{const s=JSON.parse(localStorage.getItem('ibazzzar.shop')||'{}'),valid=(i:CartItem)=>typeof i?.productId==='string'&&Number.isInteger(i.quantity)&&i.quantity>0&&i.quantity<=10000;if(Array.isArray(s.cart))setCart(s.cart.filter(valid));if(Array.isArray(s.saved))setSaved(s.saved.filter(valid));if(Array.isArray(s.wishlist))setWishlist(s.wishlist.filter((x:unknown)=>typeof x==='string'));if(s.mode==='business')setMode('business');}catch{}setReady(true);},[]);
- useEffect(()=>{if(ready)try{localStorage.setItem('ibazzzar.shop',JSON.stringify({cart,wishlist,mode,saved}));}catch{}},[cart,wishlist,mode,saved,ready]);
- useEffect(()=>{if(message){const timer=setTimeout(()=>setMessage(''),4000);return()=>clearTimeout(timer);}},[message]);
- const add=(p:Product,quantity=1)=>{if(p.stock<quantity){setMessage('This quantity is unavailable');return;}setCart(items=>{const old=items.find(i=>i.productId===p.id);const n=Math.min((old?.quantity||0)+quantity,p.stock);return old?items.map(i=>i.productId===p.id?{...i,quantity:n}:i):[...items,{productId:p.id,quantity:n}];});setMessage(`${p.name} added to your bag`);};
- const saveForLater=(id:string)=>{const item=cart.find(i=>i.productId===id);if(!item)return;setCart(items=>items.filter(i=>i.productId!==id));setSaved(list=>[...list.filter(i=>i.productId!==id),item]);setMessage('Saved for later');};
- const moveToBag=(id:string)=>{const item=saved.find(i=>i.productId===id);if(!item)return;setSaved(list=>list.filter(i=>i.productId!==id));setCart(items=>items.some(i=>i.productId===id)?items:[...items,item]);setMessage('Moved to your bag');};
- return <QueryClientProvider client={client}><Context.Provider value={{cart,wishlist,mode,ready,setMode,add,quantity:(id,n)=>setCart(items=>n<1?items.filter(i=>i.productId!==id):items.map(i=>i.productId===id?{...i,quantity:Math.min(10000,Math.floor(n))}:i)),clear:()=>setCart([]),wish:id=>setWishlist(items=>items.includes(id)?items.filter(i=>i!==id):[...items,id]),notify:setMessage,saved,saveForLater,moveToBag,removeSaved:id=>setSaved(list=>list.filter(i=>i.productId!==id))}}>{children}{message&&<div className="toast" role="status">{message}</div>}</Context.Provider></QueryClientProvider>;
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Toaster, toast } from 'sonner';
+import { api, post, put, del, patch, ApiError } from '@/lib/api';
+import type { Mode, User } from '@/lib/types';
+
+// ───────────── Session ─────────────
+export function useSession() {
+  const query = useQuery({
+    queryKey: ['me'],
+    queryFn: async () => {
+      try { return (await api<{ user: User }>('/auth/me')).user; } catch (e) { if (e instanceof ApiError && e.status === 401) return null; throw e; }
+    },
+    staleTime: 60_000,
+  });
+  return { user: query.data ?? null, loading: query.isLoading, refresh: query.refetch };
+}
+
+// ───────────── Cart & wishlist ─────────────
+export type CartLine = { listingId: string; quantity: number; savedForLater?: boolean };
+type CartState = {
+  lines: CartLine[]; saved: CartLine[]; mode: Mode; count: number; ready: boolean;
+  add: (listingId: string, quantity?: number) => Promise<void>;
+  setQuantity: (listingId: string, quantity: number) => Promise<void>;
+  remove: (listingId: string) => Promise<void>;
+  saveForLater: (listingId: string, saved: boolean) => Promise<void>;
+  setMode: (mode: Mode) => void;
+  clearLocal: (listingIds: string[]) => void;
+  wishlist: Set<string>;
+  toggleWishlist: (catalogProductId: string) => Promise<void>;
+};
+const CartContext = createContext<CartState | null>(null);
+const STORAGE = 'ibazzzar.cart.v2';
+
+type ServerCart = { cart: { mode: Mode; items: { listingId: string; quantity: number }[]; savedForLater: { listingId: string; quantity: number }[] } };
+
+function readLocal(): { lines: CartLine[]; mode: Mode; wishlist: string[] } {
+  try {
+    const raw = JSON.parse(localStorage.getItem(STORAGE) || '{}');
+    return { lines: Array.isArray(raw.lines) ? raw.lines.filter((l: CartLine) => typeof l.listingId === 'string' && Number.isInteger(l.quantity) && l.quantity > 0).slice(0, 100) : [], mode: raw.mode === 'BUSINESS' ? 'BUSINESS' : 'RETAIL', wishlist: Array.isArray(raw.wishlist) ? raw.wishlist.slice(0, 200) : [] };
+  } catch { return { lines: [], mode: 'RETAIL', wishlist: [] }; }
+}
+
+function CartProvider({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useSession();
+  const qc = useQueryClient();
+  const [lines, setLines] = useState<CartLine[]>([]);
+  const [mode, setModeState] = useState<Mode>('RETAIL');
+  const [wishlist, setWishlist] = useState<Set<string>>(new Set());
+  const [ready, setReady] = useState(false);
+  const merged = useRef<string | null>(null);
+
+  const applyServer = useCallback((data: ServerCart) => {
+    setLines([...data.cart.items.map((i) => ({ ...i, savedForLater: false })), ...data.cart.savedForLater.map((i) => ({ ...i, savedForLater: true }))]);
+    setModeState(data.cart.mode);
+  }, []);
+
+  // Guest: browser storage. Signed in: server cart, merging the guest cart once per sign-in.
+  useEffect(() => {
+    if (loading) return;
+    const local = readLocal();
+    if (!user) {
+      setLines(local.lines); setModeState(local.mode); setWishlist(new Set(local.wishlist)); setReady(true); merged.current = null;
+      return;
+    }
+    if (merged.current === user.id) return;
+    merged.current = user.id;
+    (async () => {
+      try {
+        const data = await post<ServerCart>('/cart/merge', { items: local.lines.filter((l) => !l.savedForLater).map(({ listingId, quantity }) => ({ listingId, quantity })), mode: local.mode });
+        applyServer(data);
+        if (local.wishlist.length) await post('/wishlist/merge', { ids: local.wishlist });
+        const w = await api<{ ids: string[] }>('/wishlist');
+        setWishlist(new Set(w.ids));
+        localStorage.setItem(STORAGE, JSON.stringify({ lines: [], mode: data.cart.mode, wishlist: [] }));
+      } catch { /* the cart still works from the server on the next action */ }
+      setReady(true);
+    })();
+  }, [user, loading, applyServer]);
+
+  useEffect(() => {
+    if (ready && !user) {
+      try { localStorage.setItem(STORAGE, JSON.stringify({ lines, mode, wishlist: [...wishlist] })); } catch { /* storage disabled */ }
+    }
+  }, [lines, mode, wishlist, user, ready]);
+
+  const guarded = useCallback(async (fn: () => Promise<void>) => {
+    try { await fn(); qc.invalidateQueries({ queryKey: ['cart-quote'] }); } catch (e) { toast.error(e instanceof Error ? e.message : 'Something went wrong'); throw e; }
+  }, [qc]);
+
+  const value = useMemo<CartState>(() => {
+    const setServerItem = async (listingId: string, quantity: number, savedForLater?: boolean) => applyServer(await put<ServerCart>('/cart/items', { listingId, quantity, savedForLater }));
+    return {
+      lines: lines.filter((l) => !l.savedForLater),
+      saved: lines.filter((l) => l.savedForLater),
+      mode, ready, wishlist,
+      count: lines.filter((l) => !l.savedForLater).reduce((s, l) => s + l.quantity, 0),
+      add: (listingId, quantity = 1) => guarded(async () => {
+        const current = lines.find((l) => l.listingId === listingId && !l.savedForLater)?.quantity ?? 0;
+        if (user) await setServerItem(listingId, Math.min(current + quantity, 10000), false);
+        else setLines((prev) => [...prev.filter((l) => l.listingId !== listingId), { listingId, quantity: Math.min(current + quantity, 10000) }]);
+      }),
+      setQuantity: (listingId, quantity) => guarded(async () => {
+        if (user) await setServerItem(listingId, quantity);
+        else setLines((prev) => (quantity <= 0 ? prev.filter((l) => l.listingId !== listingId) : prev.map((l) => (l.listingId === listingId ? { ...l, quantity } : l))));
+      }),
+      remove: (listingId) => guarded(async () => {
+        if (user) await setServerItem(listingId, 0);
+        else setLines((prev) => prev.filter((l) => l.listingId !== listingId));
+      }),
+      saveForLater: (listingId, saved) => guarded(async () => {
+        const line = lines.find((l) => l.listingId === listingId);
+        if (!line) return;
+        if (user) await setServerItem(listingId, line.quantity, saved);
+        else setLines((prev) => prev.map((l) => (l.listingId === listingId ? { ...l, savedForLater: saved } : l)));
+      }),
+      setMode: (next) => {
+        setModeState(next);
+        if (user) patch('/cart', { mode: next }).catch(() => {});
+      },
+      clearLocal: (ids) => setLines((prev) => prev.filter((l) => l.savedForLater || !ids.includes(l.listingId))),
+      toggleWishlist: async (catalogProductId) => {
+        const has = wishlist.has(catalogProductId);
+        const next = new Set(wishlist);
+        if (has) next.delete(catalogProductId); else next.add(catalogProductId);
+        setWishlist(next);
+        if (user) {
+          try { if (has) await del(`/wishlist/${catalogProductId}`); else await put(`/wishlist/${catalogProductId}`); } catch (e) { setWishlist(wishlist); toast.error(e instanceof Error ? e.message : 'Could not update wishlist'); return; }
+        }
+        toast.success(has ? 'Removed from wishlist' : 'Saved to wishlist');
+      },
+    };
+  }, [lines, mode, ready, wishlist, user, guarded, applyServer]);
+
+  return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
+}
+
+export function useCart() {
+  const ctx = useContext(CartContext);
+  if (!ctx) throw new Error('useCart must be used inside <Providers>');
+  return ctx;
+}
+
+export function Providers({ children }: { children: React.ReactNode }) {
+  const [client] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: (n, e) => !(e instanceof ApiError && e.status < 500) && n < 2, refetchOnWindowFocus: false } } }));
+  return (
+    <QueryClientProvider client={client}>
+      <CartProvider>{children}</CartProvider>
+      <Toaster position="top-center" richColors closeButton toastOptions={{ style: { fontFamily: 'var(--font-sans)' } }} />
+    </QueryClientProvider>
+  );
 }

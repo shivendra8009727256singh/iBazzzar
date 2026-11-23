@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import express from 'express';
 import { DomainError, indianStates } from '../../../../packages/shared/src/index.js';
-import { checkoutSchema, addressSchema, mobileSchema, uuid } from '../../../../packages/validation/src/index.js';
+import { checkoutSchema, addressSchema, addressPatchSchema, mobileSchema, uuid } from '../../../../packages/validation/src/index.js';
 import { requireAuth, publicUser, SESSION_COOKIE, SESSION_DAYS, cookieOptions } from '../http/middleware.js';
 import { transaction, toPaise } from '../lib/db.js';
 import { sha256, randomToken } from '../lib/security.js';
@@ -189,7 +189,7 @@ export function registerOrders(app, { prisma, config, payments, limits, logger }
   });
   app.patch('/api/account/addresses/:id', requireAuth, async (req, res) => {
     const id = uuid.parse(req.params.id);
-    const input = addressSchema.partial().parse(req.body);
+    const input = addressPatchSchema.parse(req.body);
     const address = await transaction(prisma, async (tx) => {
       const a = await tx.address.findUnique({ where: { id } });
       if (!a || a.userId !== req.user.id) throw new DomainError('Address not found', 404);
