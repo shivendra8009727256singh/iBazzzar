@@ -4,7 +4,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Lock, MapPin, Truck, CreditCard, Banknote, Landmark, CheckCircle2, Pencil } from 'lucide-react';
+import { Lock, MapPin, Truck, CreditCard, Banknote, Landmark, CheckCircle2, Pencil, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, post, newKey, ApiError } from '@/lib/api';
 import { formatMoney, cn, pct } from '@/lib/format';
@@ -14,33 +14,45 @@ import { useQuote } from '@/components/use-quote';
 import { AddressFields, addressPayload, emptyAddress } from '@/components/address-form';
 import { Alert, Button, Checkbox, Field, Input, Skeleton, Steps, useFormErrors, Empty } from '@/components/ui';
 import { payDemo, payOnline } from '@/components/pay';
+import { PriceDetails } from '@/components/price-details';
 
 type Method = 'ONLINE' | 'COD' | 'BANK_TRANSFER';
 const STEPS = ['Address', 'Delivery', 'Payment', 'Review'];
 
 function Summary({ quote, fetching }: { quote?: Quote; fetching: boolean }) {
-  if (!quote) return <Skeleton className="h-72" />;
+  if (!quote) return <Skeleton className="h-72 rounded-2xl" />;
   return (
-    <aside className={cn('card card-pad lg:sticky lg:top-28 h-fit', fetching && 'opacity-60')} aria-label="Order summary">
-      <h2 className="text-xl mb-4">Order summary</h2>
-      <ul className="grid gap-3 mb-4 max-h-64 overflow-y-auto">
-        {quote.lines.map((l) => (
-          <li key={l.listingId} className="flex gap-3 items-center">
-            <span className="relative size-12 shrink-0 rounded-lg bg-cream"><Image src={l.image} alt="" fill sizes="48px" className="object-contain p-1" unoptimized /><span className="absolute -top-1.5 -right-1.5 size-5 rounded-full bg-emerald text-white text-[11px] grid place-items-center">{l.quantity}</span></span>
-            <span className="flex-1 min-w-0 text-sm"><span className="block truncate font-medium">{l.name}</span><span className="text-muted">{l.sellerName}</span></span>
-            <span className="text-sm font-semibold">{formatMoney(l.totalPaise)}</span>
-          </li>
-        ))}
-      </ul>
-      <dl className="grid gap-2 text-[15px] border-t border-line pt-4">
-        <div className="flex justify-between"><dt className="text-muted">Items</dt><dd>{formatMoney(quote.subtotalPaise)}</dd></div>
-        {!!quote.discountPaise && <div className="flex justify-between text-success"><dt>Discount{quote.coupon ? ` (${quote.coupon.code})` : ''}</dt><dd>−{formatMoney(quote.discountPaise)}</dd></div>}
-        <div className="flex justify-between"><dt className="text-muted">Delivery</dt><dd>{quote.shippingPaise ? formatMoney(quote.shippingPaise) : 'Free'}</dd></div>
-        {!!quote.codFeePaise && <div className="flex justify-between"><dt className="text-muted">Cash on delivery fee</dt><dd>{formatMoney(quote.codFeePaise)}</dd></div>}
-        <div className="flex justify-between border-t border-line pt-3 mt-1 text-lg font-bold"><dt>Total to pay</dt><dd>{formatMoney(quote.totalPaise)}</dd></div>
-        {quote.taxPaise != null && <div className="flex justify-between text-[13px] text-muted"><dt>Includes GST</dt><dd>{formatMoney(quote.taxPaise)}</dd></div>}
-      </dl>
+    <aside className="lg:sticky lg:top-32 h-fit grid gap-4" aria-label="Order summary">
+      <PriceDetails quote={quote} fetching={fetching} showTax />
+      <section className="rounded-2xl border border-line bg-white shadow-card overflow-hidden">
+        <h2 className="px-5 py-3.5 border-b border-line text-[13px] font-bold uppercase tracking-[0.1em] text-muted">Items ({quote.lines.reduce((s, l) => s + l.quantity, 0)})</h2>
+        <ul className="grid gap-3 p-4 max-h-72 overflow-y-auto">
+          {quote.lines.map((l) => (
+            <li key={l.listingId} className="flex gap-3 items-center">
+              <span className="relative size-12 shrink-0 rounded-lg bg-white border border-line"><Image src={l.image} alt="" fill sizes="48px" className="object-contain p-1" unoptimized /><span className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full bg-forest text-white text-[11px] font-bold grid place-items-center">{l.quantity}</span></span>
+              <span className="flex-1 min-w-0 text-sm"><span className="block truncate font-medium">{l.name}</span><span className="text-xs text-muted">{l.sellerName}</span></span>
+              <span className="text-sm font-semibold tabular-nums shrink-0 pr-1">{formatMoney(l.totalPaise)}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
     </aside>
+  );
+}
+
+/** A numbered checkout step: green header while active, a tick with a short summary once done. */
+function StepCard({ n, title, icon: Icon, state, summary, onChange, children }: { n: number; title: string; icon: typeof MapPin; state: 'todo' | 'active' | 'done'; summary?: React.ReactNode; onChange?: () => void; children?: React.ReactNode }) {
+  const id = `step-${n}`;
+  return (
+    <section className={cn('rounded-2xl border bg-white overflow-hidden transition-shadow', state === 'active' ? 'border-forest shadow-lift' : 'border-line shadow-card')} aria-labelledby={id}>
+      <header className={cn('flex items-center gap-3 px-5 py-3.5', state === 'active' ? 'bg-forest text-white' : 'bg-white')}>
+        <span className={cn('size-7 rounded-md grid place-items-center text-sm font-bold shrink-0', state === 'active' ? 'bg-white text-forest' : state === 'done' ? 'bg-success text-white' : 'bg-mint text-muted')}>{state === 'done' ? <Check size={15} /> : n}</span>
+        <h2 id={id} className={cn('font-sans text-[15px] font-bold uppercase tracking-[0.08em] flex items-center gap-2', state === 'todo' && 'text-muted')}><Icon size={17} className={state === 'active' ? 'text-gold-light' : 'text-forest'} />{title}</h2>
+        {state === 'done' && onChange && <button className="ml-auto rounded-lg border border-line px-3 py-1 text-sm font-semibold text-forest hover:border-forest inline-flex items-center gap-1" onClick={onChange}><Pencil size={13} />Change</button>}
+      </header>
+      {state === 'done' && summary && <div className="px-5 pb-4 pl-[3.75rem] -mt-1 text-[14.5px]">{summary}</div>}
+      {state === 'active' && <div className="p-5">{children}</div>}
+    </section>
   );
 }
 
@@ -157,23 +169,23 @@ export default function CheckoutPage() {
     } finally { setBusy(false); }
   };
 
-  const editButton = (to: number) => <button className="link text-sm inline-flex items-center gap-1" onClick={() => setStep(to)}><Pencil size={13} />Change</button>;
+  const stateOf = (i: number) => (step === i ? 'active' : step > i ? 'done' : 'todo') as 'todo' | 'active' | 'done';
 
   return (
-    <div className="container-page py-8">
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
-        <h1 className="text-3xl flex items-center gap-2"><Lock size={22} className="text-forest" />Secure checkout</h1>
-        <Steps steps={STEPS} current={step} />
-      </div>
-      {errors.message && <div className="mb-5"><Alert>{errors.message}</Alert></div>}
-      {quoteError && <div className="mb-5"><Alert>{(quoteError as Error).message} <Link href="/cart" className="underline">Review your cart</Link></Alert></div>}
+    <div className="bg-[#f5f6f2] min-h-screen pb-12">
+      <div className="container-page py-5 md:py-6">
+        <div className="rounded-2xl border border-line bg-white shadow-card px-5 py-4 mb-5 flex flex-wrap items-center justify-between gap-4">
+          <h1 className="text-2xl flex items-center gap-2"><Lock size={20} className="text-forest" />Secure checkout</h1>
+          <Steps steps={STEPS} current={step} />
+        </div>
+        {errors.message && <div className="mb-5"><Alert>{errors.message}</Alert></div>}
+        {quoteError && <div className="mb-5"><Alert>{(quoteError as Error).message} <Link href="/cart" className="underline">Review your cart</Link></Alert></div>}
 
-      <div className="grid gap-8 lg:grid-cols-[1fr_380px]">
-        <div className="grid gap-5 content-start">
-          {/* 1. Address */}
-          <section className="card card-pad" aria-labelledby="s-address">
-            <div className="flex items-center justify-between mb-4"><h2 id="s-address" className="text-xl flex items-center gap-2"><MapPin size={20} className="text-forest" />Delivery address</h2>{step > 0 && editButton(0)}</div>
-            {step === 0 ? (
+        <div className="grid gap-5 lg:grid-cols-[1fr_380px] items-start">
+          <div className="grid gap-4 content-start min-w-0">
+            {/* 1. Address */}
+            <StepCard n={1} title="Delivery address" icon={MapPin} state={stateOf(0)} onChange={() => setStep(0)}
+              summary={<p><strong>{address.name}</strong>, {address.line1}{address.line2 ? `, ${address.line2}` : ''}, {address.city}, {address.state} <strong>{address.pincode}</strong> · {address.phone}</p>}>
               <div className="grid gap-5">
                 {!user && (
                   <div className="grid gap-4 sm:grid-cols-2 rounded-xl bg-cream p-4">
@@ -185,74 +197,72 @@ export default function CheckoutPage() {
                   </div>
                 )}
                 {saved && saved.length > 0 && (
-                  <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Saved addresses">
+                  <div className="grid gap-2" role="radiogroup" aria-label="Saved addresses">
                     {saved.map((a) => (
-                      <label key={a.id} className={cn('rounded-xl border p-3 cursor-pointer text-sm', addressId === a.id ? 'border-emerald bg-mint' : 'border-line')}>
-                        <input type="radio" className="sr-only" name="addr" checked={addressId === a.id} onChange={() => { setAddressId(a.id); setAddress(a); }} />
-                        <span className="font-semibold">{a.label} · {a.name}</span><span className="block text-muted">{a.line1}, {a.city}, {a.state} {a.pincode}</span>
+                      <label key={a.id} className={cn('flex gap-3 rounded-xl border p-4 cursor-pointer text-sm transition', addressId === a.id ? 'border-forest bg-mint/60' : 'border-line hover:border-line-strong')}>
+                        <input type="radio" className="checkbox mt-0.5" name="addr" checked={addressId === a.id} onChange={() => { setAddressId(a.id); setAddress(a); }} />
+                        <span><span className="font-semibold">{a.name}</span> <span className="ml-1 rounded bg-mint px-1.5 py-0.5 text-[11px] font-bold uppercase text-forest">{a.label}</span> <span className="text-muted ml-1">{a.phone}</span><span className="block text-muted mt-1">{a.line1}{a.line2 ? `, ${a.line2}` : ''}, {a.city}, {a.state} <strong className="text-ink">{a.pincode}</strong></span></span>
                       </label>
                     ))}
-                    <button className={cn('rounded-xl border border-dashed p-3 text-sm font-semibold', !addressId ? 'border-emerald text-emerald' : 'border-line-strong text-muted')} onClick={() => { setAddressId(null); setAddress({ ...emptyAddress, name: user?.name ?? '', phone: user?.phone ?? '' }); }}>+ New address</button>
+                    <button className={cn('rounded-xl border border-dashed p-3.5 text-sm font-semibold text-left', !addressId ? 'border-forest text-forest bg-mint/40' : 'border-line-strong text-forest hover:bg-cream')} onClick={() => { setAddressId(null); setAddress({ ...emptyAddress, name: user?.name ?? '', phone: user?.phone ?? '' }); }}>+ Add a new address</button>
                   </div>
                 )}
                 {!addressId && <AddressFields value={address} onChange={setAddress} errors={Object.fromEntries(['name', 'phone', 'line1', 'line2', 'city', 'state', 'pincode'].map((k) => [`address.${k}`, errors.field(`address.${k}`)]))} />}
                 {user && !addressId && <Checkbox checked={saveAddress} onChange={(e) => setSaveAddress(e.target.checked)} label="Save this address for next time" />}
                 {mode === 'BUSINESS' && <Field label="GSTIN for the invoice (optional)" hint="Claim input tax credit on the seller’s invoice"><Input value={gstin} maxLength={15} className="uppercase" onChange={(e) => setGstin(e.target.value)} /></Field>}
-                <Button size="lg" onClick={toDelivery} className="justify-self-start">Continue to delivery</Button>
+                <Button size="lg" variant="gold" onClick={toDelivery} className="justify-self-start px-8">Continue to delivery</Button>
               </div>
-            ) : (
-              <p className="text-[15px]"><strong>{address.name}</strong>, {address.line1}{address.line2 ? `, ${address.line2}` : ''}, {address.city}, {address.state} {address.pincode} · {address.phone}</p>
-            )}
-          </section>
+            </StepCard>
 
-          {/* 2. Delivery */}
-          <section className={cn('card card-pad', step < 1 && 'opacity-60')} aria-labelledby="s-delivery">
-            <div className="flex items-center justify-between mb-4"><h2 id="s-delivery" className="text-xl flex items-center gap-2"><Truck size={20} className="text-forest" />Delivery</h2>{step > 1 && editButton(1)}</div>
-            {step >= 1 && quote && (
-              <div className="grid gap-3">
-                {quote.sellers.map((g) => (
-                  <div key={g.sellerId} className="rounded-xl border border-line p-4 flex flex-wrap items-center justify-between gap-2 text-sm">
-                    <span><strong>{g.sellerName}</strong> · {quote.lines.filter((l) => l.sellerId === g.sellerId).length} item(s)</span>
-                    {g.estimate?.serviceable === false ? <span className="text-danger font-medium">{g.estimate.reason}</span>
-                      : <span>{g.estimate ? `Arrives in ${g.estimate.minDays}–${g.estimate.maxDays} days` : 'Standard delivery'} · <strong>{g.shippingPaise ? formatMoney(g.shippingPaise) : 'Free'}</strong></span>}
-                  </div>
-                ))}
-                <p className="text-[13px] text-muted">Each seller ships separately. Dates are estimates from your PIN code, not courier guarantees.</p>
-                {step === 1 && <Button size="lg" className="justify-self-start" disabled={!quote.serviceable} onClick={() => setStep(2)}>Continue to payment</Button>}
-              </div>
-            )}
-          </section>
+            {/* 2. Delivery */}
+            <StepCard n={2} title="Delivery" icon={Truck} state={stateOf(1)} onChange={() => setStep(1)}
+              summary={quote && <p className="text-muted">{quote.sellers.length} parcel{quote.sellers.length === 1 ? '' : 's'} · delivery {quote.shippingPaise ? formatMoney(quote.shippingPaise) : <span className="text-success font-semibold">free</span>}</p>}>
+              {quote && (
+                <div className="grid gap-3">
+                  {quote.sellers.map((g) => (
+                    <div key={g.sellerId} className="rounded-xl border border-line p-4 flex flex-wrap items-center justify-between gap-2 text-sm">
+                      <span className="flex items-center gap-2"><Truck size={16} className="text-forest" /><span><strong>{g.sellerName}</strong> · {quote.lines.filter((l) => l.sellerId === g.sellerId).length} item(s)</span></span>
+                      {g.estimate?.serviceable === false ? <span className="text-danger font-medium">{g.estimate.reason}</span>
+                        : <span>{g.estimate ? `Arrives in ${g.estimate.minDays}–${g.estimate.maxDays} days` : 'Standard delivery'} · <strong className={g.shippingPaise ? '' : 'text-success'}>{g.shippingPaise ? formatMoney(g.shippingPaise) : 'Free'}</strong></span>}
+                    </div>
+                  ))}
+                  <p className="text-[13px] text-muted">Each seller ships separately. Dates are estimates from your PIN code, not courier guarantees.</p>
+                  <Button size="lg" variant="gold" className="justify-self-start px-8" disabled={!quote.serviceable} onClick={() => setStep(2)}>Continue to payment</Button>
+                </div>
+              )}
+            </StepCard>
 
-          {/* 3. Payment */}
-          <section className={cn('card card-pad', step < 2 && 'opacity-60')} aria-labelledby="s-payment">
-            <div className="flex items-center justify-between mb-4"><h2 id="s-payment" className="text-xl flex items-center gap-2"><CreditCard size={20} className="text-forest" />Payment</h2>{step > 2 && editButton(2)}</div>
-            {step >= 2 && (
+            {/* 3. Payment */}
+            <StepCard n={3} title="Payment options" icon={CreditCard} state={stateOf(2)} onChange={() => setStep(2)}
+              summary={<p className="text-muted">{methods.find((m) => m.id === method)?.title}</p>}>
               <div className="grid gap-3" role="radiogroup" aria-label="Payment method">
                 {methods.map((m) => (
-                  <label key={m.id} className={cn('flex items-start gap-3 rounded-xl border p-4', m.disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer', method === m.id ? 'border-emerald bg-mint' : 'border-line')}>
+                  <label key={m.id} className={cn('flex items-start gap-3 rounded-xl border p-4 transition', m.disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer', method === m.id ? 'border-forest bg-mint/60' : 'border-line hover:border-line-strong')}>
                     <input type="radio" name="method" className="checkbox" disabled={m.disabled} checked={method === m.id} onChange={() => setMethod(m.id)} />
-                    <m.icon size={20} className="text-forest shrink-0 mt-0.5" />
+                    <span className="size-10 rounded-xl bg-white border border-line grid place-items-center shrink-0"><m.icon size={19} className="text-forest" /></span>
                     <span><span className="font-semibold block">{m.title}</span><span className="text-sm text-muted">{m.body}</span></span>
                   </label>
                 ))}
-                {step === 2 && <Button size="lg" className="justify-self-start" onClick={() => setStep(3)} disabled={method === 'COD' && !codAvailable}>Review order</Button>}
+                <Button size="lg" variant="gold" className="justify-self-start px-8" onClick={() => setStep(3)} disabled={method === 'COD' && !codAvailable}>Review order</Button>
               </div>
-            )}
-          </section>
+            </StepCard>
 
-          {/* 4. Review */}
-          {step === 3 && quote && (
-            <section className="card card-pad" aria-labelledby="s-review">
-              <h2 id="s-review" className="text-xl mb-3">Review and place order</h2>
-              <p className="text-sm text-muted">By placing this order you agree to the <Link href="/pages/terms" className="link">Terms</Link> and the sellers’ <Link href="/pages/returns" className="link">return policy</Link>. Prices include GST{quote.lines.some((l) => l.taxRateBps) ? ` (${[...new Set(quote.lines.map((l) => l.taxRateBps))].filter(Boolean).map(pct).join(', ')})` : ''}; there are no other charges.</p>
-              {/* The total is re-quoted when the payment method changes; placing is blocked until it settles so the customer pays exactly what they see. */}
-              <Button size="lg" className="w-full mt-5" loading={busy || isFetching} disabled={isFetching} onClick={place}>
-                {method === 'COD' ? `Place order · pay ${formatMoney(quote.totalPaise)} on delivery` : method === 'BANK_TRANSFER' ? `Place order · ${formatMoney(quote.totalPaise)} by bank transfer` : `Place order and pay ${formatMoney(quote.totalPaise)}`}
-              </Button>
-            </section>
-          )}
+            {/* 4. Review */}
+            <StepCard n={4} title="Review & place order" icon={CheckCircle2} state={stateOf(3)}>
+              {quote && (
+                <div>
+                  <p className="text-sm text-muted">By placing this order you agree to the <Link href="/pages/terms" className="link">Terms</Link> and the sellers’ <Link href="/pages/returns" className="link">return policy</Link>. Prices include GST{quote.lines.some((l) => l.taxRateBps) ? ` (${[...new Set(quote.lines.map((l) => l.taxRateBps))].filter(Boolean).map(pct).join(', ')})` : ''}; there are no other charges.</p>
+                  {/* The total is re-quoted when the payment method changes; placing is blocked until it settles so the customer pays exactly what they see. */}
+                  <Button size="lg" className="w-full mt-5 h-14 text-[16px]" loading={busy || isFetching} disabled={isFetching} onClick={place}>
+                    {method === 'COD' ? `Place order · pay ${formatMoney(quote.totalPaise)} on delivery` : method === 'BANK_TRANSFER' ? `Place order · ${formatMoney(quote.totalPaise)} by bank transfer` : `Place order and pay ${formatMoney(quote.totalPaise)}`}
+                  </Button>
+                  <p className="text-center text-[12.5px] text-muted mt-3 flex items-center justify-center gap-1.5"><Lock size={13} />Payments are processed securely. IBazzzar never stores card details.</p>
+                </div>
+              )}
+            </StepCard>
+          </div>
+          <Summary quote={quote} fetching={isFetching} />
         </div>
-        <Summary quote={quote} fetching={isFetching} />
       </div>
     </div>
   );

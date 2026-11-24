@@ -41,7 +41,16 @@ export function registerCatalog(app, { prisma }) {
 
   app.get('/api/brands', async (_req, res) => {
     const brands = await prisma.brand.findMany({ where: { products: { some: { status: 'APPROVED' } } }, orderBy: { name: 'asc' }, include: { _count: { select: { products: { where: { status: 'APPROVED' } } } } } });
-    res.json({ brands: brands.map((b) => ({ id: b.id, name: b.name, slug: b.slug, logoUrl: b.logoUrl, verified: b.verified, products: b._count.products })) });
+    // Main category and lowest live price per brand, for the brand directory cards.
+    const extra = brands.length ? await prisma.$queryRaw`
+      SELECT cp."brandId" AS id, (array_agg(c.name ORDER BY c.name))[1] AS category, MIN(l."pricePaise")::bigint AS "fromPaise",
+             (array_agg(m.url ORDER BY cp.featured DESC, cp."createdAt"))[1] AS image
+      FROM catalog_products cp JOIN categories c ON c.id = cp."categoryId" JOIN product_variants v ON v."catalogProductId" = cp.id
+      JOIN seller_listings l ON l."variantId" = v.id AND l.status = 'APPROVED'
+      LEFT JOIN LATERAL (SELECT url FROM product_media pm WHERE pm."catalogProductId" = cp.id ORDER BY "sortOrder" LIMIT 1) m ON true
+      WHERE cp.status = 'APPROVED' GROUP BY cp."brandId"` : [];
+    const info = new Map(extra.map((x) => [x.id, x]));
+    res.json({ brands: brands.map((b) => ({ id: b.id, name: b.name, slug: b.slug, logoUrl: b.logoUrl, verified: b.verified, products: b._count.products, category: info.get(b.id)?.category ?? null, fromPaise: info.get(b.id)?.fromPaise == null ? null : Number(info.get(b.id).fromPaise), image: info.get(b.id)?.image ?? null })) });
   });
 
   app.get('/api/products', async (req, res) => {
@@ -85,10 +94,11 @@ export function registerCatalog(app, { prisma }) {
     const variantOffers = offers.filter((o) => o.variantId === selected.id).sort((a, b) => Number(b.stock > 0) - Number(a.stock > 0) || a.effectivePaise - b.effectivePaise);
     const best = variantOffers[0];
 
-    const [rating, reviews, relatedIds] = await Promise.all([
+    const [rating, reviews, relatedIds, breakdown] = await Promise.all([
       ratings(prisma, [product.id]),
       prisma.review.findMany({ where: { catalogProductId: product.id, status: 'PUBLISHED' }, orderBy: { createdAt: 'desc' }, take: 20 }),
       prisma.catalogProduct.findMany({ where: { categoryId: product.categoryId, status: 'APPROVED', id: { not: product.id } }, select: { id: true }, take: 8, orderBy: { createdAt: 'desc' } }),
+      prisma.review.groupBy({ by: ['rating'], where: { catalogProductId: product.id, status: 'PUBLISHED' }, _count: { _all: true } }),
     ]);
     const stores = await prisma.sellerStore.findMany({ where: { id: { in: variantOffers.map((o) => o.storeId) } }, include: { primaryCategory: true } });
     res.json({
@@ -99,6 +109,8 @@ export function registerCatalog(app, { prisma }) {
         images: product.media.map((m) => ({ url: m.url, alt: m.alt })),
         specifications: product.attributes.map((a) => ({ name: a.attribute.name, value: a.value })),
         rating: rating.get(product.id) ?? null, demo: product.demo,
+        // How many reviews gave each star rating, 5 down to 1.
+        ratingBreakdown: [5, 4, 3, 2, 1].map((stars) => ({ stars, count: breakdown.find((b) => b.rating === stars)?._count._all ?? 0 })),
       },
       variants,
       selectedVariantId: selected.id,
