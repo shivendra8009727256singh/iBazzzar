@@ -15,6 +15,12 @@ export const DEFAULTS = {
     legalName: '', gstin: '', address: { line1: '', line2: '', city: '', state: '', pincode: '' },
     socials: { instagram: '', facebook: '', x: '', youtube: '', linkedin: '' },
   },
+  // The /deals page banner. Empty title or button text means "work it out from the live deals".
+  // Changed in Admin → Homepage & content → Deals page banner.
+  dealsHero: {
+    eyebrow: 'Today’s deals', title: '', subtitle: 'Real start and end times. Prices go back to normal when the timer ends — no fake urgency, no inflated MRPs.',
+    ctaLabel: '', bgFrom: '#3d0808', bgVia: '#c8331f', bgTo: '#e8902d', showTimer: true, showProducts: true, fillWithDiscounted: true,
+  },
 };
 
 export async function getSetting(db, key) {

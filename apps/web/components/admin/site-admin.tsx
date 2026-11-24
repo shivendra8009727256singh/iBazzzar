@@ -237,3 +237,85 @@ export function HeroSlides({ banners, refetch }: { banners: BannerRow[]; refetch
     </section>
   );
 }
+
+// ───────────── Deals page banner ─────────────
+export type DealsHeroSettings = { eyebrow: string; title: string; subtitle: string; ctaLabel: string; bgFrom: string; bgVia: string; bgTo: string; showTimer: boolean; showProducts: boolean; fillWithDiscounted: boolean };
+const DEAL_PRESETS: [string, string, string, string][] = [
+  ['Sale red', '#3d0808', '#c8331f', '#e8902d'], ['Festive purple', '#2a0a3d', '#8e2463', '#e0602b'], ['Emerald gold', '#062a1e', '#17603f', '#c99a3d'],
+  ['Midnight blue', '#0b1a33', '#1d4f7a', '#3b7cb5'], ['Diwali gold', '#4a2306', '#b8620f', '#f0b43c'], ['Rose', '#3d0a1f', '#b4234a', '#f06a8a'],
+];
+const hexOk = (v: string) => /^#[0-9a-f]{6}$/i.test(v);
+
+/** Text, colours and product options for the /deals banner; the products themselves come from live deals. */
+export function DealsHeroForm({ value, refetch }: { value: DealsHeroSettings; refetch: () => void }) {
+  const [f, setF] = useState<DealsHeroSettings>(value);
+  const [saving, setSaving] = useState(false);
+  const set = (patch: Partial<DealsHeroSettings>) => setF((x) => ({ ...x, ...patch }));
+  const dirty = JSON.stringify(f) !== JSON.stringify(value);
+  const save = async () => {
+    setSaving(true);
+    try { await put('/admin/deals-hero', f); toast.success('Deals banner saved. It shows on /deals within a minute.'); refetch(); }
+    catch (e) { toast.error((e as Error).message); } finally { setSaving(false); }
+  };
+  const bg = `linear-gradient(115deg, ${hexOk(f.bgFrom) ? f.bgFrom : '#000'} 0%, ${hexOk(f.bgVia) ? f.bgVia : '#333'} 55%, ${hexOk(f.bgTo) ? f.bgTo : '#666'} 100%)`;
+  return (
+    <section className="card card-pad grid gap-5">
+      <div><h2 className="text-lg">Deals page banner</h2><p className="text-sm text-muted">The big banner at the top of <a href="/deals" target="_blank" rel="noreferrer" className="link">/deals</a>. Products, prices, discounts and the timer always come from the live deals.</p></div>
+
+      <div className="rounded-2xl overflow-hidden text-white p-6 md:p-8 relative" style={{ background: bg }}>
+        <span className="inline-flex rounded-full bg-white/15 border border-white/20 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em]">{f.eyebrow || '—'}</span>
+        <p className="mt-3 font-display text-[34px] md:text-[46px] leading-none bg-gradient-to-b from-white to-[#ffd98a] bg-clip-text text-transparent">{f.title || 'Up to NN% OFF'}</p>
+        {f.subtitle && <p className="text-white/80 mt-2 max-w-lg text-sm">{f.subtitle}</p>}
+        <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
+          {f.showTimer && <span className="rounded-lg bg-white text-ink px-2.5 py-1 font-semibold">01 : 18 : 45</span>}
+          <span className="rounded-full bg-white text-ink px-4 py-1.5 font-semibold">{f.ctaLabel || 'Shop (current deal)'} →</span>
+          {f.showProducts && <span className="text-white/75">+ top 3 deal products on the right</span>}
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Small label"><Input value={f.eyebrow} maxLength={40} onChange={(e) => set({ eyebrow: e.target.value })} /></Field>
+        <Field label="Headline" hint="Leave empty to show “Up to N% OFF” from the real discounts"><Input value={f.title} maxLength={60} onChange={(e) => set({ title: e.target.value })} placeholder="Up to N% OFF (automatic)" /></Field>
+        <Field label="Supporting text" className="sm:col-span-2"><Textarea rows={2} maxLength={220} value={f.subtitle} onChange={(e) => set({ subtitle: e.target.value })} /></Field>
+        <Field label="Button text" hint="Leave empty for “Shop” plus the current deal’s name"><Input value={f.ctaLabel} maxLength={40} onChange={(e) => set({ ctaLabel: e.target.value })} placeholder="Shop (current deal) — automatic" /></Field>
+      </div>
+
+      <div className="grid gap-3">
+        <p className="text-sm font-semibold">Background</p>
+        <div className="flex flex-wrap gap-2">
+          {DEAL_PRESETS.map(([name, a, b, c]) => {
+            const on = f.bgFrom === a && f.bgVia === b && f.bgTo === c;
+            return (
+              <button key={name} type="button" onClick={() => set({ bgFrom: a, bgVia: b, bgTo: c })} aria-pressed={on}
+                className={`flex items-center gap-2 rounded-full border pl-1 pr-3 py-1 text-[13px] font-semibold hover:border-forest ${on ? 'border-forest bg-mint' : 'border-line'}`}>
+                <span className="size-6 rounded-full" style={{ background: `linear-gradient(115deg, ${a}, ${b}, ${c})` }} />{name}
+              </button>
+            );
+          })}
+        </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          {([['bgFrom', 'Left colour'], ['bgVia', 'Middle colour'], ['bgTo', 'Right colour']] as const).map(([k, label]) => (
+            <Field key={k} label={label} error={hexOk(f[k]) ? undefined : 'Use a colour like #b42318'}>
+              <div className="flex items-center gap-2">
+                <input type="color" aria-label={`Pick ${label.toLowerCase()}`} value={hexOk(f[k]) ? f[k] : '#000000'} onChange={(e) => set({ [k]: e.target.value })} className="h-11 w-14 rounded-lg border border-line cursor-pointer bg-white p-1" />
+                <Input value={f[k]} onChange={(e) => set({ [k]: e.target.value })} />
+              </div>
+            </Field>
+          ))}
+        </div>
+        <p className="text-xs text-muted">Text on the banner is white, so pick darker colours on the left.</p>
+      </div>
+
+      <div className="grid gap-2">
+        <Checkbox checked={f.showTimer} onChange={(e) => set({ showTimer: e.target.checked })} label="Show the countdown of the current deal" />
+        <Checkbox checked={f.showProducts} onChange={(e) => set({ showProducts: e.target.checked })} label="Show the top 3 deal products (biggest discount first)" />
+        <Checkbox checked={f.fillWithDiscounted} disabled={!f.showProducts} onChange={(e) => set({ fillWithDiscounted: e.target.checked })} label="If fewer than 3 products are on deal, fill up with other discounted products" />
+      </div>
+
+      <div className="flex gap-2">
+        <Button onClick={save} disabled={!dirty || saving || ![f.bgFrom, f.bgVia, f.bgTo].every(hexOk)}>{saving ? 'Saving…' : 'Save deals banner'}</Button>
+        {dirty && <Button variant="ghost" onClick={() => setF(value)}>Discard changes</Button>}
+      </div>
+    </section>
+  );
+}

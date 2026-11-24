@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { Flame, TicketPercent, Clock, ArrowRight, Zap, ShieldCheck, CalendarClock, Tag, BadgePercent, Sparkles } from 'lucide-react';
 import { tryServerApi } from '@/lib/server-api';
 import type { Product } from '@/lib/types';
-import { cn, formatDate, formatMoney } from '@/lib/format';
+import { cn, formatDate, formatMoney, percentOff } from '@/lib/format';
 import { ProductGrid } from '@/components/product-card';
 import { CountdownBoxes, CouponCard, DealProgress, Rail } from '@/components/home-sections';
 import { TILE_BG } from '@/lib/tiles';
@@ -14,6 +14,9 @@ export const metadata: Metadata = { title: 'Deals and offers', description: 'Sch
 export const dynamic = 'force-dynamic'; // rendered per request; API data is cached via fetch revalidate
 
 type Deal = { id: string; name: string; description: string; discountBps: number; startsAt: string; endsAt: string; live: boolean; products: Product[] };
+/** Admin → Homepage & content → Deals page banner. Empty title/button text are worked out from the live deals. */
+export type DealsHero = { eyebrow: string; title: string; subtitle: string; ctaLabel: string; bgFrom: string; bgVia: string; bgTo: string; showTimer: boolean; showProducts: boolean; fillWithDiscounted: boolean };
+const HERO_DEFAULTS: DealsHero = { eyebrow: 'Today’s deals', title: '', subtitle: 'Real start and end times. Prices go back to normal when the timer ends — no fake urgency, no inflated MRPs.', ctaLabel: '', bgFrom: '#3d0808', bgVia: '#c8331f', bgTo: '#e8902d', showTimer: true, showProducts: true, fillWithDiscounted: true };
 type Offers = { offers: { code: string; description: string; kind: string; value: number; maxDiscountPaise: number | null; minOrderPaise: number; mode: string; endsAt: string }[] };
 
 const pct = (d: Deal) => Math.round(d.discountBps / 100);
@@ -26,7 +29,7 @@ const LIVE_TONES = [
 
 export default async function DealsPage() {
   const [deals, offers, discounted] = await Promise.all([
-    tryServerApi<{ deals: Deal[] }>('/deals', { revalidate: 60 }),
+    tryServerApi<{ deals: Deal[]; hero?: Partial<DealsHero> }>('/deals', { revalidate: 30 }),
     tryServerApi<Offers>('/offers', { revalidate: 60 }),
     tryServerApi<{ products: Product[] }>('/products?sort=discount&limit=12', { revalidate: 120 }),
   ]);
@@ -34,9 +37,15 @@ export default async function DealsPage() {
   const live = all.filter((d) => d.live);
   const upcoming = all.filter((d) => !d.live);
   const featured = live[0] ?? upcoming[0];
-  const best = Math.max(0, ...all.map(pct), ...(discounted?.products ?? []).map((p) => Math.round(100 - (p.pricePaise / Math.max(1, p.mrpPaise)) * 100)));
-  // Featured deal first, topped up with other discounted products so the collage always has three.
-  const collage = [...(featured?.products ?? []), ...(discounted?.products ?? [])].filter((p, i, a) => a.findIndex((x) => x.catalogProductId === p.catalogProductId) === i).slice(0, 3);
+  const hero = { ...HERO_DEFAULTS, ...(deals?.hero ?? {}) };
+  const off = (p: Product) => percentOff(p.pricePaise, p.mrpPaise);
+  // Top 3 products on live deals by real discount (price vs MRP); optionally topped up with everyday discounts.
+  const dealProducts = live.flatMap((d) => d.products).sort((a, b) => off(b) - off(a));
+  const pool = hero.fillWithDiscounted ? [...dealProducts, ...[...(discounted?.products ?? [])].sort((a, b) => off(b) - off(a))] : dealProducts;
+  const collage = hero.showProducts ? pool.filter((p, i, a) => a.findIndex((x) => x.catalogProductId === p.catalogProductId) === i).slice(0, 3) : [];
+  const best = Math.max(0, ...all.map(pct), ...collage.map(off), ...(discounted?.products ?? []).map(off));
+  const ctaLabel = hero.ctaLabel || (featured ? `Shop ${featured.name}` : 'Shop discounts');
+  const ctaHref = featured ? (featured.live ? '#live' : '#upcoming') : '#everyday';
   const tabs = [
     live.length ? ['#live', `Live now (${live.length})`, Flame] : null,
     upcoming.length ? ['#upcoming', `Coming soon (${upcoming.length})`, CalendarClock] : null,
@@ -47,24 +56,26 @@ export default async function DealsPage() {
   return (
     <div className="bg-[#f3f5f0] -mb-16 pb-16">
       {/* Sale banner */}
-      <section className="relative overflow-hidden text-white bg-[linear-gradient(115deg,#3d0808_0%,#8f1a14_40%,#c8331f_70%,#e8902d_100%)]">
+      <section className="relative overflow-hidden text-white" style={{ background: `linear-gradient(115deg, ${hero.bgFrom} 0%, ${hero.bgVia} 55%, ${hero.bgTo} 100%)` }}>
         <span className="absolute inset-0 opacity-[0.08] bg-[radial-gradient(circle_at_1px_1px,white_1px,transparent_0)] [background-size:20px_20px]" aria-hidden />
         <span className="absolute -left-24 -bottom-32 size-96 rounded-full bg-[#ffd98a]/15 blur-3xl" aria-hidden />
         <span className="absolute right-[8%] -top-24 size-[420px] rounded-full bg-white/[0.07]" aria-hidden />
         <div className="container-page relative py-8 md:py-12 grid gap-8 lg:grid-cols-[1.1fr_1fr] items-center">
           <div>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 border border-white/20 px-3 py-1 text-[11px] md:text-xs font-bold uppercase tracking-[0.16em]"><Zap size={13} className="text-[#ffd98a]" />Today’s deals</span>
-            <h1 className="mt-4 text-white leading-[0.95]">
-              <span className="block text-[22px] md:text-[28px] font-sans font-semibold text-white/85">Up to</span>
-              <span className="block font-display text-[76px] md:text-[120px] bg-gradient-to-b from-white to-[#ffd98a] bg-clip-text text-transparent">{best || 20}% OFF</span>
-            </h1>
-            <p className="text-white/80 mt-3 max-w-lg text-[15px] md:text-[17px]">Real start and end times. Prices go back to normal when the timer ends — no fake urgency, no inflated MRPs.</p>
-            {featured && (
-              <div className="mt-6 flex flex-wrap items-end gap-5">
-                <CountdownBoxes endsAt={featured.endsAt} startsAt={featured.live ? undefined : featured.startsAt} />
-                <a href={featured.live ? '#live' : '#upcoming'} className="btn bg-white text-[#9f1d17] hover:bg-ivory rounded-full">Shop {featured.name}<ArrowRight size={16} /></a>
-              </div>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 border border-white/20 px-3 py-1 text-[11px] md:text-xs font-bold uppercase tracking-[0.16em]"><Zap size={13} className="text-[#ffd98a]" />{hero.eyebrow}</span>
+            {hero.title ? (
+              <h1 className="mt-4 font-display text-[44px] leading-[1.02] md:text-[72px] bg-gradient-to-b from-white to-[#ffd98a] bg-clip-text text-transparent">{hero.title}</h1>
+            ) : (
+              <h1 className="mt-4 text-white leading-[0.95]">
+                <span className="block text-[22px] md:text-[28px] font-sans font-semibold text-white/85">Up to</span>
+                <span className="block font-display text-[76px] md:text-[120px] bg-gradient-to-b from-white to-[#ffd98a] bg-clip-text text-transparent">{best || 20}% OFF</span>
+              </h1>
             )}
+            {hero.subtitle && <p className="text-white/80 mt-3 max-w-lg text-[15px] md:text-[17px]">{hero.subtitle}</p>}
+            <div className="mt-6 flex flex-wrap items-end gap-5">
+              {hero.showTimer && featured && <CountdownBoxes endsAt={featured.endsAt} startsAt={featured.live ? undefined : featured.startsAt} />}
+              <a href={ctaHref} className="btn bg-white text-ink hover:bg-ivory rounded-full">{ctaLabel}<ArrowRight size={16} /></a>
+            </div>
           </div>
           {collage.length > 0 && (
             <div className="relative h-[230px] sm:h-[300px] md:h-[340px] max-lg:hidden sm:max-lg:block">
@@ -76,12 +87,13 @@ export default async function DealsPage() {
                     i === 2 && 'right-0 top-[30%] w-[34%] aspect-square z-10 rotate-[8deg]')}>
                   <span className={cn('absolute inset-0', TILE_BG[i % TILE_BG.length])} />
                   <Image src={p.image} alt="" fill sizes="240px" className="object-contain p-6" unoptimized={p.image.startsWith('/api/')} />
-                  {p.promotion && <span className="absolute top-3 left-3 rounded-full bg-danger text-white text-[11px] font-bold px-2 py-0.5">{Math.round(p.promotion.discountBps / 100)}% OFF</span>}
+                  {off(p) > 0 && <span className="absolute top-3 left-3 rounded-full bg-danger text-white text-[11px] font-bold px-2 py-0.5">{off(p)}% OFF</span>}
                   <span className="absolute bottom-0 inset-x-0 bg-white/95 px-3 py-2 text-[12px] font-bold text-ink truncate">{formatMoney(p.pricePaise)} <span className="text-muted font-normal line-through">{formatMoney(p.mrpPaise)}</span></span>
                 </Link>
               ))}
+              {/* Deal discount on top of the seller's price ("extra"), or the best saving when no deal is live. */}
               <span className="absolute right-[6%] top-0 z-30 size-24 md:size-28 rounded-full bg-[#ffd98a] text-[#7a1a10] grid place-items-center text-center font-display leading-none rotate-12 shadow-lift">
-                <span><span className="block text-[13px] font-sans font-bold tracking-wider">FLAT</span><span className="text-[34px] md:text-[40px]">{featured ? pct(featured) : best}%</span><span className="block text-[13px] font-sans font-bold">OFF</span></span>
+                <span><span className="block text-[12px] font-sans font-bold tracking-wider">{live[0] ? 'EXTRA' : 'UP TO'}</span><span className="text-[34px] md:text-[40px]">{live[0] ? pct(live[0]) : best}%</span><span className="block text-[12px] font-sans font-bold">OFF</span></span>
               </span>
             </div>
           )}
@@ -89,7 +101,7 @@ export default async function DealsPage() {
         {tabs.length > 0 && (
           <nav aria-label="Deals sections" className="relative border-t border-white/15 bg-black/15 backdrop-blur">
             <div className="container-page flex gap-2 overflow-x-auto no-scrollbar py-3">
-              {tabs.map(([href, label, Icon]) => <a key={href} href={href} className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-white/12 hover:bg-white hover:text-[#9f1d17] border border-white/20 px-4 py-2 text-sm font-semibold transition"><Icon size={15} />{label}</a>)}
+              {tabs.map(([href, label, Icon]) => <a key={href} href={href} className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-white/12 hover:bg-white hover:text-ink border border-white/20 px-4 py-2 text-sm font-semibold transition"><Icon size={15} />{label}</a>)}
             </div>
           </nav>
         )}

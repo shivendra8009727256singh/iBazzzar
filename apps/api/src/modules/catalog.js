@@ -161,9 +161,10 @@ export function registerCatalog(app, { prisma }) {
       include: { items: { select: { listingId: true } } }, relationLoadStrategy: 'join',
     });
     const listingIds = promotions.flatMap((p) => p.items.map((i) => i.listingId));
-    const listings = await loadListings(prisma, listingIds, now);
+    const [listings, hero] = await Promise.all([loadListings(prisma, listingIds, now), getSetting(prisma, 'dealsHero')]);
     res.json({
       now,
+      hero,
       deals: promotions.map((p) => ({
         id: p.id, name: p.name, description: p.description, discountBps: p.discountBps, startsAt: p.startsAt, endsAt: p.endsAt,
         live: p.startsAt <= now,

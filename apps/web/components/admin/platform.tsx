@@ -10,7 +10,7 @@ import type { Ticket } from '@/lib/types';
 import { cn, formatDate, formatDateTime, formatMoney, rupeesToPaise } from '@/lib/format';
 import { SupportThread } from '../support-thread';
 import { Alert, Badge, Button, ConfirmButton, Field, Input, Select, StatusBadge, Textarea, Checkbox } from '../ui';
-import { HeroSlides, SiteBrandForm, type BannerRow } from './site-admin';
+import { DealsHeroForm, HeroSlides, SiteBrandForm, type BannerRow, type DealsHeroSettings } from './site-admin';
 import type { Site } from '../site-context';
 import { withDefaults } from '../site-context';
 import { DataTable, Drawer, KV, Loadable, Pager, Section, Table, attempt, useAdminList, useAdminTable, useOpenParam, type Column, type ListResponse } from './kit';
@@ -21,6 +21,7 @@ type CmsData = {
   pages: { slug: string; title: string; body: string; published: boolean; version: number; updatedAt: string }[];
   banners: BannerRow[];
   featured: { id: string; name: string; status: string }[];
+  dealsHero: DealsHeroSettings;
 };
 export function Cms() {
   const query = useQuery({ queryKey: ['admin', 'cms'], queryFn: () => api<CmsData>('/admin/cms') });
@@ -36,6 +37,7 @@ export function Cms() {
       <Loadable query={query}>{(d) => (
         <div className="grid gap-6">
           <HeroSlides banners={d.banners} refetch={query.refetch} />
+          <DealsHeroForm key={JSON.stringify(d.dealsHero)} value={d.dealsHero} refetch={query.refetch} />
           <div className="grid gap-4 xl:grid-cols-2">
             {d.sections.filter((s) => s.id !== 'hero' && s.id !== 'announcement').map((s) => { // hero → slides above; announcement → Settings › Brand & site
               const draft = drafts[s.id] ?? { heading: s.heading, body: s.body, ctaLabel: s.data.ctaLabel, ctaLink: s.data.ctaLink, published: s.published };

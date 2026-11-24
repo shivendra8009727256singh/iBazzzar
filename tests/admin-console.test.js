@@ -282,3 +282,17 @@ describe('Dashboard and console chrome', () => {
     expect((await shopper.agent.get('/api/admin/dashboard/extra')).status).toBe(403);
   });
 });
+
+describe('Deals page banner', () => {
+  it('admin edits the banner, bad colours are refused, and /api/deals serves it', async () => {
+    const before = (await ctx.agent().get('/api/deals')).body.hero;
+    expect(before.eyebrow).toBeTruthy();
+    expect((await admin.agent.put('/api/admin/deals-hero').send({ bgFrom: 'red' })).status).toBe(400);
+    const res = await admin.agent.put('/api/admin/deals-hero').send({ title: 'Mega Monsoon Sale', bgFrom: '#3b0a45', showTimer: false });
+    expect(res.status).toBe(200);
+    const hero = (await ctx.agent().get('/api/deals')).body.hero;
+    expect(hero).toMatchObject({ title: 'Mega Monsoon Sale', bgFrom: '#3b0a45', showTimer: false, eyebrow: before.eyebrow });
+    const shopper = await ctx.register();
+    expect((await shopper.agent.put('/api/admin/deals-hero').send({ title: 'Nope' })).status).toBe(403);
+  });
+});
