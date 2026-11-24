@@ -5,9 +5,9 @@ import Image from 'next/image';
 import { ChevronLeft, ChevronRight, Copy, Check, Star, ArrowRight, TicketPercent } from 'lucide-react';
 import type { Product } from '@/lib/types';
 import { cn, formatMoney, percentOff } from '@/lib/format';
+import { TILE_BG } from '@/lib/tiles';
 
-/** Soft backgrounds behind product art, so simple illustrations and cut-outs read as styled tiles. */
-export const TILE_BG = ['bg-[#f4efe2]', 'bg-[#e8f0ea]', 'bg-[#eaf0f7]', 'bg-[#f3ecf7]', 'bg-[#fbece6]', 'bg-[#eef3e3]'];
+
 
 const ratingTone = (r: number) => (r >= 4 ? 'bg-success' : r >= 3 ? 'bg-[#c27c0e]' : 'bg-danger');
 
@@ -92,21 +92,25 @@ export function QuadCard({ title, href, cta, products, tone = 0, tags }: { title
 }
 
 /** Big ticking timer for the deal of the day (client-only time to avoid hydration mismatch). */
-export function CountdownBoxes({ endsAt, startsAt }: { endsAt: string; startsAt?: string }) {
+export function CountdownBoxes({ endsAt, startsAt, tone = 'red', hideLabel }: { endsAt: string; startsAt?: string; tone?: 'red' | 'navy'; hideLabel?: boolean }) {
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => { setNow(Date.now()); const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
   const upcoming = !!startsAt && now != null && Date.parse(startsAt) > now;
   const ms = now == null ? 0 : Math.max(0, (upcoming ? Date.parse(startsAt!) : Date.parse(endsAt)) - now);
-  const parts = [['Hrs', Math.floor(ms / 3_600_000)], ['Min', Math.floor(ms / 60_000) % 60], ['Sec', Math.floor(ms / 1000) % 60]] as const;
+  // More than a day away: days / hours / minutes; otherwise hours / minutes / seconds.
+  const parts: [string, number][] = ms >= 86_400_000
+    ? [['Days', Math.floor(ms / 86_400_000)], ['Hrs', Math.floor(ms / 3_600_000) % 24], ['Min', Math.floor(ms / 60_000) % 60]]
+    : [['Hrs', Math.floor(ms / 3_600_000)], ['Min', Math.floor(ms / 60_000) % 60], ['Sec', Math.floor(ms / 1000) % 60]];
+  const ink = tone === 'navy' ? 'text-[#1d4f7a]' : 'text-[#9f1d17]';
   return (
     <div aria-label={upcoming ? 'Starts in' : 'Ends in'}>
-      <p className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/75">{upcoming ? 'Starts in' : 'Ends in'}</p>
-      <div className="mt-2 flex items-center gap-1.5">
+      {!hideLabel && <p className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/75 mb-2">{upcoming ? 'Starts in' : 'Ends in'}</p>}
+      <div className="flex items-center gap-1.5">
         {parts.map(([label, v], i) => (
           <span key={label} className="flex items-center gap-1.5">
-            <span className="grid place-items-center min-w-[54px] rounded-xl bg-white text-[#9f1d17] px-2 py-1.5 shadow-lift">
+            <span className={cn('grid place-items-center min-w-[54px] rounded-xl bg-white px-2 py-1.5 shadow-lift', ink)}>
               <span className="font-display text-[26px] leading-none tabular-nums">{now == null ? '--' : String(v).padStart(2, '0')}</span>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-[#9f1d17]/70 mt-0.5">{label}</span>
+              <span className="text-[10px] font-bold uppercase tracking-wider opacity-70 mt-0.5">{label}</span>
             </span>
             {i < 2 && <span className="font-display text-2xl text-white/80">:</span>}
           </span>
@@ -124,7 +128,7 @@ export function CouponCard({ o, index = 0 }: { o: FullOffer; index?: number }) {
   const [copied, setCopied] = useState(false);
   const copy = async () => { try { await navigator.clipboard.writeText(o.code); setCopied(true); setTimeout(() => setCopied(false), 1600); } catch { /* clipboard blocked */ } };
   return (
-    <div className="relative flex rounded-2xl bg-white border border-line shadow-card overflow-hidden hover:shadow-lift hover:-translate-y-0.5 transition">
+    <div className="relative flex rounded-2xl bg-white text-ink border border-line shadow-card overflow-hidden hover:shadow-lift hover:-translate-y-0.5 transition">
       <div className={cn('relative w-[92px] sm:w-[104px] shrink-0 bg-gradient-to-b text-white grid place-items-center text-center px-2', OFFER_TONES[index % OFFER_TONES.length])}>
         <span className="font-display text-[26px] leading-none">{o.kind === 'PERCENT' ? `${o.value}%` : formatMoney(o.value).replace('.00', '')}<span className="block text-[11px] font-sans font-bold tracking-[0.18em] mt-1.5">OFF</span></span>
         <span className="absolute -right-2.5 -top-2.5 size-5 rounded-full bg-[#f3f5f0]" aria-hidden />
@@ -164,6 +168,22 @@ export function OfferStrip({ offers }: { offers: Offer[] }) {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+/** How much of a deal's time has passed, as a thin bar with "x% of time left" (client-only clock). */
+export function DealProgress({ startsAt, endsAt, light }: { startsAt: string; endsAt: string; light?: boolean }) {
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => { setNow(Date.now()); const t = setInterval(() => setNow(Date.now()), 30_000); return () => clearInterval(t); }, []);
+  const start = Date.parse(startsAt), end = Date.parse(endsAt);
+  const left = now == null ? 1 : Math.min(1, Math.max(0, (end - now) / Math.max(1, end - start)));
+  return (
+    <div className="min-w-[160px]">
+      <div className={cn('h-2 rounded-full overflow-hidden', light ? 'bg-black/10' : 'bg-white/20')}>
+        <div className={cn('h-full rounded-full transition-[width] duration-700', light ? 'bg-danger' : 'bg-gradient-to-r from-[#ffd98a] to-white')} style={{ width: `${Math.round(left * 100)}%` }} />
+      </div>
+      <p className={cn('text-[11.5px] font-semibold mt-1', light ? 'text-danger' : 'text-white/80')}>{now == null ? ' ' : left < 0.2 ? 'Ending soon — hurry' : `${Math.round(left * 100)}% of deal time left`}</p>
     </div>
   );
 }
