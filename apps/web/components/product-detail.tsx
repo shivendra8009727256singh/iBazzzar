@@ -206,6 +206,7 @@ export function ProductDetail({ data }: { data: Detail }) {
         <nav aria-label="Breadcrumb" className="text-[13px] text-muted mb-4">
           <ol className="flex flex-wrap items-center gap-1">
             <li><Link href="/" className="hover:text-forest">Home</Link></li>
+            <ChevronRight size={13} /><li><Link href="/products" className="hover:text-forest">Products</Link></li>
             {p.category.parent && <><ChevronRight size={13} /><li><Link href={`/products?category=${p.category.parent.slug}`} className="hover:text-forest">{p.category.parent.name}</Link></li></>}
             <ChevronRight size={13} /><li><Link href={`/products?category=${p.category.slug}`} className="hover:text-forest">{p.category.name}</Link></li>
             <ChevronRight size={13} /><li><Link href={`/products?brand=${p.brand.slug}`} className="hover:text-forest">{p.brand.name}</Link></li>

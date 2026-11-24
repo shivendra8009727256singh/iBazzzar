@@ -8,7 +8,7 @@ import * as Popover from '@radix-ui/react-popover';
 import * as Dialog from '@radix-ui/react-dialog';
 import {
   Heart, ShoppingBag, User as UserIcon, Menu, X, Headphones, Truck, Store, Building2, LayoutGrid, ChevronDown, Bell,
-  Home, Search, Package, LogOut, Shield, Briefcase, Sparkles,
+  Home, Package, LogOut, Shield, Briefcase, Sparkles,
 } from 'lucide-react';
 import { api, post } from '@/lib/api';
 import { cn } from '@/lib/format';
@@ -28,11 +28,15 @@ function Announcement() {
 
 const NAV = [
   { href: '/', label: 'Home' },
+  { href: '/products', label: 'Products' },
   { href: '/deals', label: 'Deals' },
   { href: '/brands', label: 'Brands' },
   { href: '/wholesale', label: 'Wholesale' },
   { href: '/sell', label: 'Become a Seller' },
 ];
+
+/** A menu item stays highlighted on its sub-pages too (e.g. Products on a product page). */
+const navActive = (pathname: string, href: string) => (href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(`${href}/`));
 
 function useCategories() {
   return useQuery({ queryKey: ['categories'], queryFn: () => api<{ categories: Category[] }>('/categories').then((r) => r.categories), staleTime: 5 * 60_000 });
@@ -112,7 +116,7 @@ function CategoryMenu() {
             ))}
           </div>
           <div className="border-t border-line mt-4 pt-4 flex flex-wrap gap-3 text-sm">
-            <Link href="/products" onClick={() => setOpen(false)} className="link">Browse everything →</Link>
+            <Link href="/products" onClick={() => setOpen(false)} className="link">All products →</Link>
             <Link href="/wholesale" onClick={() => setOpen(false)} className="link">Wholesale catalogue →</Link>
             <Link href="/deals" onClick={() => setOpen(false)} className="link">Today’s deals →</Link>
           </div>
@@ -198,8 +202,8 @@ export function Header() {
             <CategoryMenu />
             <nav className="flex items-center gap-1" aria-label="Main">
               {NAV.map((n) => (
-                <Link key={n.href} href={n.href} aria-current={pathname === n.href ? 'page' : undefined}
-                  className={cn('rounded-lg px-3 py-1.5 text-[14.5px] font-medium hover:bg-mint', pathname === n.href && 'text-emerald font-semibold bg-mint')}>
+                <Link key={n.href} href={n.href} aria-current={navActive(pathname, n.href) ? 'page' : undefined}
+                  className={cn('rounded-lg px-3 py-1.5 text-[14.5px] font-medium hover:bg-mint', navActive(pathname, n.href) && 'text-emerald font-semibold bg-mint')}>
                   {n.label}
                 </Link>
               ))}
@@ -218,7 +222,7 @@ export function MobileTabBar() {
   if (/^\/(admin|checkout)/.test(pathname)) return null;
   const tabs = [
     { href: '/', label: 'Home', icon: Home },
-    { href: '/products', label: 'Shop', icon: Search },
+    { href: '/products', label: 'Products', icon: LayoutGrid },
     { href: '/wholesale', label: 'Business', icon: Building2 },
     { href: '/cart', label: 'Cart', icon: ShoppingBag, badge: count },
     { href: '/account', label: 'Account', icon: UserIcon },

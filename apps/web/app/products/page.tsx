@@ -48,7 +48,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
         <nav aria-label="Breadcrumb" className="text-[13px] text-muted mb-3">
           <ol className="flex flex-wrap items-center gap-1">
             <li><Link href="/" className="hover:text-forest">Home</Link></li>
-            <ChevronRight size={13} /><li><Link href="/products" className="hover:text-forest">Shop</Link></li>
+            <ChevronRight size={13} /><li><Link href="/products" className="hover:text-forest">Products</Link></li>
             {cat && <><ChevronRight size={13} /><li aria-current="page" className="text-ink">{cat.name}</li></>}
           </ol>
         </nav>

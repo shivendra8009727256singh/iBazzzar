@@ -44,8 +44,9 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
       '@context': 'https://schema.org', '@type': 'BreadcrumbList',
       itemListElement: [
         { '@type': 'ListItem', position: 1, name: 'Home', item: SITE },
-        { '@type': 'ListItem', position: 2, name: p.category.name, item: `${SITE}/products?category=${p.category.slug}` },
-        { '@type': 'ListItem', position: 3, name: p.name, item: `${SITE}/products/${p.slug}` },
+        { '@type': 'ListItem', position: 2, name: 'Products', item: `${SITE}/products` },
+        { '@type': 'ListItem', position: 3, name: p.category.name, item: `${SITE}/products?category=${p.category.slug}` },
+        { '@type': 'ListItem', position: 4, name: p.name, item: `${SITE}/products/${p.slug}` },
       ],
     },
   ];
