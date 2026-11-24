@@ -155,7 +155,10 @@ export function registerCatalog(app, { prisma }) {
       deals: promotions.map((p) => ({
         id: p.id, name: p.name, description: p.description, discountBps: p.discountBps, startsAt: p.startsAt, endsAt: p.endsAt,
         live: p.startsAt <= now,
-        products: p.items.map((i) => listings.get(i.listingId)).filter((l) => l?.sellable).map(publicListing).slice(0, 12),
+        // One card per product: a product on deal with several variants or sellers shows its best price once.
+        products: [...p.items.map((i) => listings.get(i.listingId)).filter((l) => l?.sellable)
+          .reduce((best, l) => { const cur = best.get(l.catalogProductId); if (!cur || l.effectivePaise < cur.effectivePaise) best.set(l.catalogProductId, l); return best; }, new Map())
+          .values()].map(publicListing).slice(0, 12),
       })).filter((d) => d.products.length),
     });
   });
