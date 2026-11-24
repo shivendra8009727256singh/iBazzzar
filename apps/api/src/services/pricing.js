@@ -51,13 +51,19 @@ export async function quote(db, input, { at = new Date(), listings: preloaded } 
   let coupon = null;
   let discountPaise = 0;
   if (input.couponCode) {
-    coupon = await db.coupon.findUnique({ where: { code: input.couponCode } });
-    if (!coupon) throw new DomainError('We couldn’t find that coupon code', 404);
-    const normalised = { ...coupon, minOrderPaise: Number(coupon.minOrderPaise), maxDiscountPaise: coupon.maxDiscountPaise == null ? null : Number(coupon.maxDiscountPaise) };
-    discountPaise = couponDiscount(normalised, subtotalPaise, mode, at.getTime());
-    if (input.userId) {
-      const used = await db.couponRedemption.count({ where: { couponId: coupon.id, userId: input.userId, order: { status: { not: 'CANCELLED' } } } });
-      if (used >= coupon.perUserLimit) throw new DomainError('You have already used this coupon', 409);
+    // Coupon problems carry { coupon } so the website can remove just the coupon and keep the rest of the cart priced.
+    try {
+      coupon = await db.coupon.findUnique({ where: { code: input.couponCode } });
+      if (!coupon) throw new DomainError('We couldn’t find that coupon code', 404);
+      const normalised = { ...coupon, minOrderPaise: Number(coupon.minOrderPaise), maxDiscountPaise: coupon.maxDiscountPaise == null ? null : Number(coupon.maxDiscountPaise) };
+      discountPaise = couponDiscount(normalised, subtotalPaise, mode, at.getTime());
+      if (input.userId) {
+        const used = await couponUsesBy(db, coupon.id, input.userId);
+        if (used >= coupon.perUserLimit) throw new DomainError('You have already used this coupon', 409);
+      }
+    } catch (e) {
+      if (e instanceof DomainError) throw new DomainError(e.message, e.status, { coupon: input.couponCode });
+      throw e;
     }
   }
   const shares = allocate(discountPaise, lines.map((l) => l.lineTotalPaise));
@@ -118,6 +124,11 @@ export async function quote(db, input, { at = new Date(), listings: preloaded } 
     },
     freeShippingThresholdPaise: shipping.freeShippingThresholdPaise,
   };
+}
+
+/** How many of this customer's orders (not cancelled) used the coupon. */
+export function couponUsesBy(db, couponId, userId) {
+  return db.couponRedemption.count({ where: { couponId, userId, order: { status: { not: 'CANCELLED' } } } });
 }
 
 function codReason(mode, shipping, groups, total) {

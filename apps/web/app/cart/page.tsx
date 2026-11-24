@@ -4,7 +4,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { ShoppingBag, Minus, Plus, Trash2, Bookmark, Truck, Tag, Store, ArrowRight, AlertTriangle, MapPin, Check, X } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { post } from '@/lib/api';
+import { ApiError, post } from '@/lib/api';
 import { formatMoney, cn, percentOff } from '@/lib/format';
 import type { Quote } from '@/lib/types';
 import { useCart } from '@/components/providers';
@@ -46,7 +46,13 @@ export default function CartPage() {
   const [pincode, setPincode] = useState<string>();
   useEffect(() => { try { const p = localStorage.getItem('ibazzzar.pincode'); if (p) setPincode(p); } catch { /* ignore */ } }, []);
   const { data: quote, error, isFetching } = useQuote({ lines, mode, couponCode: applied, pincode });
-  const couponError = applied && error ? (error as Error).message : null;
+  // A coupon that stops qualifying (e.g. the cart drops below its minimum) is removed with the reason, and the cart is
+  // re-priced without it; otherwise the last good quote (old quantities) would keep showing.
+  const [couponNotice, setCouponNotice] = useState<string | null>(null);
+  useEffect(() => {
+    if (applied && error instanceof ApiError && error.fields?.coupon) { setCouponNotice(`${applied}: ${error.message}`); setApplied(undefined); }
+  }, [applied, error]);
+  const couponError = couponNotice;
   useEffect(() => { try { if (applied && !error) sessionStorage.setItem('ibazzzar.coupon', applied); else sessionStorage.removeItem('ibazzzar.coupon'); } catch { /* ignore */ } }, [applied, error]);
 
   if (!ready) return <div className="container-page py-10"><Skeleton className="h-10 w-48 mb-6" /><Skeleton className="h-64" /></div>;
@@ -83,11 +89,13 @@ export default function CartPage() {
                 </div>
               </div>
             </div>
-            {error && !applied && <Alert>{(error as Error).message}</Alert>}
+            {error && !(error instanceof ApiError && error.fields?.coupon) && <Alert>{(error as Error).message}</Alert>}
 
             {quote?.sellers.map((g) => {
               const sellerLines = quote.lines.filter((l) => l.sellerId === g.sellerId);
-              const remaining = quote.freeShippingThresholdPaise - g.goodsPaise - sellerLines.reduce((s, l) => s + l.discountPaise, 0);
+              // Free delivery is judged on the items' value before any coupon (same rule as the server).
+              const itemsValue = sellerLines.reduce((s, l) => s + l.lineTotalPaise, 0);
+              const remaining = quote.freeShippingThresholdPaise - itemsValue;
               return (
                 <section key={g.sellerId} className="rounded-2xl border border-line bg-white shadow-card overflow-hidden" aria-label={`Items from ${g.sellerName}`}>
                   <header className="flex flex-wrap items-center justify-between gap-2 px-5 py-3 border-b border-line bg-[#fbfaf5]">
@@ -97,7 +105,7 @@ export default function CartPage() {
                   {g.shippingPaise > 0 && remaining > 0 && (
                     <div className="px-5 pt-3">
                       <p className="text-[13px] text-muted">Add <strong className="text-ink">{formatMoney(remaining)}</strong> more from this seller for free delivery</p>
-                      <div className="h-1.5 rounded-full bg-mint mt-1.5 overflow-hidden"><div className="h-full rounded-full bg-gradient-to-r from-gold to-gold-light" style={{ width: `${Math.min(100, (g.goodsPaise / quote.freeShippingThresholdPaise) * 100)}%` }} /></div>
+                      <div className="h-1.5 rounded-full bg-mint mt-1.5 overflow-hidden"><div className="h-full rounded-full bg-gradient-to-r from-gold to-gold-light" style={{ width: `${Math.min(100, (itemsValue / quote.freeShippingThresholdPaise) * 100)}%` }} /></div>
                     </div>
                   )}
                   <ul className="divide-y divide-line">
@@ -118,7 +126,7 @@ export default function CartPage() {
                                 {l.priceSource === 'TIER' && <span className="rounded bg-info-bg text-info text-[11px] font-bold px-1.5 py-0.5">Bulk price</span>}
                                 {l.priceSource === 'DEAL' && <span className="rounded bg-danger text-white text-[11px] font-bold px-1.5 py-0.5">Deal price</span>}
                               </div>
-                              {l.quantity > 1 && <p className="text-[13px] text-muted mt-0.5">{l.quantity} × {formatMoney(l.unitPaise)} = <strong className="text-ink">{formatMoney(l.totalPaise)}</strong></p>}
+                              {l.quantity > 1 && <p className="text-[13px] text-muted mt-0.5">{l.quantity} × {formatMoney(l.unitPaise)} = <strong className="text-ink">{formatMoney(l.lineTotalPaise)}</strong></p>}
                             </div>
                           </div>
                           <div className="flex flex-wrap items-center gap-5 mt-4">
@@ -159,13 +167,13 @@ export default function CartPage() {
                   <button aria-label="Remove coupon" className="text-muted hover:text-danger" onClick={() => { setApplied(undefined); setCoupon(''); }}><X size={16} /></button>
                 </div>
               ) : (
-                <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); setApplied(coupon.trim().toUpperCase() || undefined); }}>
+                <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); setCouponNotice(null); setApplied(coupon.trim().toUpperCase() || undefined); }}>
                   <label htmlFor="coupon" className="sr-only">Coupon code</label>
                   <input id="coupon" className="input min-h-[42px] uppercase" placeholder="Enter coupon code" value={coupon} onChange={(e) => setCoupon(e.target.value)} />
                   <button className="btn btn-outline btn-sm min-h-[42px] px-4">Apply</button>
                 </form>
               )}
-              {couponError && <p className="error-text mt-2">{couponError} <button className="link" onClick={() => { setApplied(undefined); setCoupon(''); }}>Remove</button></p>}
+              {couponError && <p className="error-text mt-2" role="alert">{couponError}</p>}
             </section>
             <PriceDetails quote={quote} fetching={isFetching}>
               <Link href="/checkout" aria-disabled={!quote?.lines.length} className={cn('btn btn-primary btn-lg w-full h-13 text-[16px]', !quote?.lines.length && 'pointer-events-none opacity-50')}>Proceed to checkout<ArrowRight size={18} /></Link>

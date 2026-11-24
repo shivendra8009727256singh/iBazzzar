@@ -11,6 +11,7 @@ import { nextNumber, nextInvoiceNumber } from '../lib/sequence.js';
 import { shortRef } from '../lib/http.js';
 import * as inventory from './inventory.js';
 import { getSetting, commissionRateFor } from './settings.js';
+import { couponUsesBy } from './pricing.js';
 
 const CONFIRMED_PAYMENTS = ['PAID', 'DEMO_SIMULATED', 'COD_PENDING', 'COD_COLLECTED', 'ON_TERMS', 'REFUNDED', 'PARTIALLY_REFUNDED'];
 export const isPaidOnline = (o) => ['PAID', 'DEMO_SIMULATED', 'PARTIALLY_REFUNDED', 'REFUNDED'].includes(o.paymentStatus);
@@ -92,7 +93,9 @@ export async function createOrder(tx, { user, organizationId = null, purchaseOrd
       where: { id: coupon.id, ...(coupon.usageLimit != null ? { used: { lt: coupon.usageLimit } } : {}) },
       data: { used: { increment: 1 } },
     });
-    if (!updated.count) throw new DomainError('This coupon has just reached its usage limit', 409);
+    if (!updated.count) throw new DomainError('This coupon has just reached its usage limit', 409, { coupon: coupon.code });
+    // The increment above holds the coupon row lock until commit, so this count sees any order placed at the same moment.
+    if (await couponUsesBy(tx, coupon.id, user.id) >= coupon.perUserLimit) throw new DomainError('You have already used this coupon', 409, { coupon: coupon.code });
     await tx.couponRedemption.create({ data: { couponId: coupon.id, userId: user.id, orderId: order.id } });
   }
 

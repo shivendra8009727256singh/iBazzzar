@@ -168,3 +168,19 @@ ended deals never apply; overlapping deals use the bigger discount; invalid deal
 
 Price-carrying page caches capped at 30 s (home, deals, discount and wholesale lists, store products) so a
 deal's start/end shows on listing cards within half a minute; cart and checkout are always live.
+
+## Coupon and cart audit (2026-11-24)
+
+Fixed:
+- Cart line read "2 × ₹1,199 = ₹2,098" with a coupon (the amount after the coupon share); it now shows the plain
+  product of quantity and price, with the coupon shown once in Price details.
+- A coupon that stops qualifying (cart below its minimum, signing in uses a once-per-customer coupon already used,
+  expired) left the cart/checkout showing the last good quote (old quantities). Coupon errors are now tagged
+  (`fields.coupon`); the cart and checkout drop the coupon, say why, and re-price.
+- Once-per-customer limit could be beaten by two simultaneous orders (verified by a failing test). It is now
+  re-checked after the coupon row is locked in the order transaction.
+- Free-delivery progress bar used the after-coupon value; it now uses the same rule as the server.
+
+New `tests/coupons.test.js` (8 tests): exact split across items with GST per item, cap and ₹1 floor, lowercase
+codes, every refusal reason marked as a coupon problem, once-per-customer with release on cancellation,
+simultaneous orders (per customer and overall limit), saved order equals the coupon quote.

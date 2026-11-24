@@ -86,6 +86,14 @@ export default function CheckoutPage() {
 
   const addressReady = address.state && /^[1-9]\d{5}$/.test(address.pincode);
   const { data: quote, error: quoteError, isFetching } = useQuote({ lines, mode, couponCode: coupon, state: addressReady ? address.state : undefined, pincode: addressReady ? address.pincode : undefined, paymentMethod: step >= 2 ? method : undefined });
+  const [couponNotice, setCouponNotice] = useState<string | null>(null);
+  useEffect(() => {
+    if (coupon && quoteError instanceof ApiError && quoteError.fields?.coupon) {
+      setCouponNotice(`Coupon ${coupon} was removed: ${quoteError.message}`);
+      setCoupon(undefined);
+      try { sessionStorage.removeItem('ibazzzar.coupon'); } catch { /* ignore */ }
+    }
+  }, [coupon, quoteError]);
   const codAvailable = quote?.payment.cod.available;
   const methods = useMemo(() => [
     { id: 'ONLINE' as const, icon: CreditCard, title: 'Pay online', body: 'UPI, cards, net banking or wallets through Razorpay', show: true },
@@ -179,7 +187,8 @@ export default function CheckoutPage() {
           <Steps steps={STEPS} current={step} />
         </div>
         {errors.message && <div className="mb-5"><Alert>{errors.message}</Alert></div>}
-        {quoteError && <div className="mb-5"><Alert>{(quoteError as Error).message} <Link href="/cart" className="underline">Review your cart</Link></Alert></div>}
+        {couponNotice && <div className="mb-5"><Alert tone="warning">{couponNotice}. Your total has been updated.</Alert></div>}
+        {quoteError && !(quoteError instanceof ApiError && quoteError.fields?.coupon) && <div className="mb-5"><Alert>{(quoteError as Error).message} <Link href="/cart" className="underline">Review your cart</Link></Alert></div>}
 
         <div className="grid gap-5 lg:grid-cols-[1fr_380px] items-start">
           <div className="grid gap-4 content-start min-w-0">
