@@ -8,6 +8,6 @@ export const dynamic = 'force-dynamic'; // rendered per request; API data is cac
 
 export default async function BrandsPage() {
   const data = await tryServerApi<{ brands: BrandCard[] }>('/brands', { revalidate: 300 });
-  if (!data?.brands.length) return <div className="container-page py-12"><div className="card"><Empty title="No brands yet" /></div></div>;
+  if (!data?.brands.length) return <div className="container-page py-12"><div className="card"><Empty title="No brands yet" body="Brands appear here as approved sellers list their products." /></div></div>;
   return <BrandDirectory brands={data.brands} />;
 }

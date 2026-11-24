@@ -196,5 +196,6 @@
 /* ───────────── Homepage hero ───────────── */
 @keyframes hero-progress { from { width: 0%; } to { width: 100%; } }
 @keyframes hero-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+@keyframes brand-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 @media (prefers-reduced-motion: reduce) { [class*='animate-[hero-float'] { animation: none !important; } }
 .no-scrollbar { scrollbar-width: none; } .no-scrollbar::-webkit-scrollbar { display: none; }
