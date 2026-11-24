@@ -209,25 +209,6 @@ export default async function HomePage() {
           </div>
         </section>
 
-        {/* Featured stores */}
-        {home?.sellers.length ? (
-          <section className="rounded-3xl bg-white border border-line shadow-card p-4 md:p-6">
-            <SectionHead title="Featured stores" subtitle="Approved by our marketplace team" action={<Link href="/sellers" className="btn btn-outline btn-sm rounded-full">All stores<ArrowRight size={14} /></Link>} />
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {home.sellers.map((s, i) => (
-                <Link key={s.id} href={`/sellers/${s.slug}`} className="group rounded-2xl border border-line p-4 flex gap-4 hover:shadow-lift hover:border-transparent transition">
-                  <span className={cn('size-12 shrink-0 rounded-xl grid place-items-center font-display text-xl', CAT_TONES[i % CAT_TONES.length])}>{s.name.charAt(0)}</span>
-                  <div className="min-w-0">
-                    <p className="font-semibold flex items-center gap-1.5 group-hover:text-forest">{s.name}<BadgeCheck size={16} className="text-forest" aria-label="Approved store" /></p>
-                    {s.primaryCategory && <p className="text-[12.5px] text-gold-ink">{s.primaryCategory}</p>}
-                    <p className="text-[13.5px] text-muted mt-1 line-clamp-2">{s.description}</p>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </section>
-        ) : null}
-
         {/* Reviews */}
         {reviews?.reviews.length ? (
           <section className="rounded-3xl bg-white border border-line shadow-card p-4 md:p-6">
