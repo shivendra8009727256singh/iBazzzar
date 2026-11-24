@@ -20,7 +20,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 export default async function StorePage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ page?: string }> }) {
   const { slug } = await params;
   const { page } = await searchParams;
-  const data = await tryServerApi<Store>(`/sellers/${slug}?page=${Number(page) || 1}`, { revalidate: 120 });
+  const data = await tryServerApi<Store>(`/sellers/${slug}?page=${Number(page) || 1}`, { revalidate: 30 });
   if (!data) notFound();
   const s = data.seller;
   const stats = [

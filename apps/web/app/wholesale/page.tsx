@@ -33,7 +33,7 @@ const ICONS: Record<string, typeof Cpu> = {
 
 export default async function WholesalePage() {
   const [data, cats] = await Promise.all([
-    tryServerApi<{ products: Product[]; total?: number }>('/products?wholesale=true&limit=8&sort=popular', { revalidate: 120 }),
+    tryServerApi<{ products: Product[]; total?: number }>('/products?wholesale=true&limit=8&sort=popular', { revalidate: 30 }),
     tryServerApi<{ categories: Category[] }>('/categories', { revalidate: 300 }),
   ]);
   const categories = (cats?.categories ?? []).filter((c) => !c.parentId);

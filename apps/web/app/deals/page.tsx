@@ -31,7 +31,7 @@ export default async function DealsPage() {
   const [deals, offers, discounted] = await Promise.all([
     tryServerApi<{ deals: Deal[]; hero?: Partial<DealsHero> }>('/deals', { revalidate: 30 }),
     tryServerApi<Offers>('/offers', { revalidate: 60 }),
-    tryServerApi<{ products: Product[] }>('/products?sort=discount&limit=12', { revalidate: 120 }),
+    tryServerApi<{ products: Product[] }>('/products?sort=discount&limit=12', { revalidate: 30 }),
   ]);
   const all = deals?.deals ?? [];
   const live = all.filter((d) => d.live);

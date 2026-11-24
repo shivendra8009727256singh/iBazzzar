@@ -38,14 +38,14 @@ const PRICE_TILES = [
 
 export default async function HomePage() {
   const [home, cats, deals, reviews, offers, brands, discounted, bulk] = await Promise.all([
-    tryServerApi<Home>('/home', { revalidate: 60 }),
+    tryServerApi<Home>('/home', { revalidate: 30 }),
     tryServerApi<{ categories: Category[] }>('/categories', { revalidate: 300 }),
-    tryServerApi<Deals>('/deals', { revalidate: 60 }),
+    tryServerApi<Deals>('/deals', { revalidate: 30 }),
     tryServerApi<{ reviews: Review[] }>('/reviews/recent', { revalidate: 300 }),
     tryServerApi<{ offers: Offer[] }>('/offers', { revalidate: 120 }),
     tryServerApi<{ brands: Brand[] }>('/brands', { revalidate: 300 }),
-    tryServerApi<{ products: Product[] }>('/products?sort=discount&limit=4', { revalidate: 120 }),
-    tryServerApi<{ products: Product[] }>('/products?wholesale=true&sort=popular&limit=4', { revalidate: 120 }),
+    tryServerApi<{ products: Product[] }>('/products?sort=discount&limit=4', { revalidate: 30 }),
+    tryServerApi<{ products: Product[] }>('/products?wholesale=true&sort=popular&limit=4', { revalidate: 30 }),
   ]);
   const wholesale = home?.sections.wholesale;
   const sell = home?.sections.sell;

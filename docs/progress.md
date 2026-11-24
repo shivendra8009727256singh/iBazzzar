@@ -153,3 +153,18 @@ finance approves; last Admin can't be removed; CSV formula injection neutralised
 - **Sign-in, register, reset password**: form in a card, segmented "sign in as" control, brand panel with benefits;
   brand name and tagline come from Brand & site.
 - Verified: lint, typecheck, 125 API tests, 13 browser tests; no horizontal scroll at 390 px or 1440 px on all of these.
+
+## Deal pricing audit (2026-11-24)
+
+Checked the whole path a deal price takes: listing shape → deals/home/product pages → cart quote → checkout →
+saved order → GST → seller earnings → refunds. One formula everywhere (`price − floor(price × bps / 10000)`),
+coupon after the deal (shared across lines exactly), GST inside the final price, business buyers get the lower
+of tier and deal, checkout refuses a total that changed and returns the new one, refunds use what was paid.
+
+New `tests/deals-pricing.test.js` (9 tests): same price on deals page, product page and cart; checkout saves the
+quoted deal price and every total adds up (goods, delivery, COD fee, GST incl. delivery/COD service tax); coupon
+on top with cap; pausing a deal reverts the price at once and checkout refuses the stale total; scheduled and
+ended deals never apply; overlapping deals use the bigger discount; invalid deals refused; business tier vs deal.
+
+Price-carrying page caches capped at 30 s (home, deals, discount and wholesale lists, store products) so a
+deal's start/end shows on listing cards within half a minute; cart and checkout are always live.
