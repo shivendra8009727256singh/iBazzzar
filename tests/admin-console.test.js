@@ -255,3 +255,30 @@ describe('Analytics', () => {
     expect(await ctx.prisma.auditLog.count({ where: { action: 'analytics.exported' } })).toBe(2);
   });
 });
+
+describe('Dashboard and console chrome', () => {
+  it('compares today and the last 30 days, and shows the order pipeline and leaders', async () => {
+    const res = await admin.agent.get('/api/admin/dashboard/extra');
+    expect(res.status).toBe(200);
+    expect(res.body.last30.orders).toBeGreaterThanOrEqual(1);
+    expect(res.body.last30.gmvPaise).toBeGreaterThan(0);
+    expect(res.body.pipeline).toHaveProperty('inTransit');
+    expect(res.body.topProducts[0].units).toBeGreaterThanOrEqual(1);
+    expect(res.body.paymentMix.find((p) => p.method === 'COD')).toBeTruthy();
+    expect(Array.isArray(res.body.activity)).toBe(true);
+  });
+
+  it('status cards count by status with a 14-day trend; the bell lists only what the role can act on', async () => {
+    const users = await admin.agent.get('/api/admin/summary/users');
+    expect(users.body.ALL.total).toBeGreaterThan(0);
+    expect(users.body.ALL.series).toHaveLength(14);
+    expect(users.body.types.customer).toBeGreaterThan(0);
+    expect((await admin.agent.get('/api/admin/summary/nope')).status).toBe(404);
+    const bell = await admin.agent.get('/api/admin/attention');
+    expect(bell.status).toBe(200);
+    expect(bell.body).toHaveProperty('total');
+    const shopper = await ctx.register();
+    expect((await shopper.agent.get('/api/admin/attention')).status).toBe(403);
+    expect((await shopper.agent.get('/api/admin/dashboard/extra')).status).toBe(403);
+  });
+});

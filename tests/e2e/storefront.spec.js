@@ -126,7 +126,7 @@ test('the Admin signs in only on its own page; a stale legacy cookie does not br
   await page.locator('input[autocomplete="current-password"]').fill(password);
   await page.getByRole('button', { name: /Sign in to the console/ }).click();
   await expect(page).toHaveURL(/\/admin$/);
-  await expect(page.getByRole('heading', { name: 'Marketplace overview' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: /^Good (morning|afternoon|evening)/ })).toBeVisible();
   for (const path of ['/api/auth/me', '/api/notifications', '/api/admin/me']) {
     expect((await page.request.get(path)).status(), path).toBe(200);
   }
@@ -147,7 +147,7 @@ test('the admin console: URL-synced tables, Order 360, analytics, search and per
   await page.getByRole('textbox', { name: 'Email', exact: true }).fill(process.env.ADMIN_EMAIL);
   await page.locator('input[autocomplete="current-password"]').fill(process.env.ADMIN_PASSWORD);
   await page.getByRole('button', { name: /Sign in to the console/ }).click();
-  await expect(page.getByRole('heading', { name: 'Marketplace overview' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: /^Good (morning|afternoon|evening)/ })).toBeVisible();
 
   // Tables keep their state in the address bar: page size and sort survive a reload.
   await page.goto('/admin/products');

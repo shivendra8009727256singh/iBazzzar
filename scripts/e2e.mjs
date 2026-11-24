@@ -1,9 +1,14 @@
 // End-to-end run: disposable database → API → production web build → Playwright specs in tests/e2e.
-// Requires `npm run build` first. Uses the installed Microsoft Edge (or Chrome) so no browser download is needed.
+// Builds the web app first so the tests never run against a stale build (set E2E_SKIP_BUILD=1 to reuse the last one). Uses the installed Microsoft Edge (or Chrome) so no browser download is needed.
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { freePort, startDatabase, startProcess, ROOT } from './stack.mjs';
+
+if (process.env.E2E_SKIP_BUILD !== '1') {
+  const build = spawnSync(process.execPath, [resolve(ROOT, 'node_modules/next/dist/bin/next'), 'build', 'apps/web'], { cwd: ROOT, stdio: 'inherit', env: { ...process.env, NODE_ENV: 'production' } });
+  if (build.status !== 0) process.exit(build.status ?? 1);
+}
 
 const db = await startDatabase({ dir: resolve(ROOT, '.local', `e2e-${randomUUID()}`), port: await freePort(), persistent: false });
 const apiPort = await freePort();

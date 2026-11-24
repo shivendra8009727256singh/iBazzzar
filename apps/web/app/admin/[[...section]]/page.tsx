@@ -19,6 +19,7 @@ import * as K from '@/components/admin/catalog';
 import * as C from '@/components/admin/commerce';
 import * as X2 from '@/components/admin/platform';
 import { AnalyticsPage } from '@/components/admin/insights';
+import { Dashboard } from '@/components/admin/dashboard';
 
 type Item = { id: string; label: string; icon: typeof Users; cap: string; group: string };
 const ITEMS: Item[] = [
@@ -147,7 +148,7 @@ export default function AdminPage({ params }: { params: Promise<{ section?: stri
   const groups = [...new Set(visible.map((i) => i.group))];
   const signOut = async () => { await post('/auth/logout'); qc.clear(); router.push(isAdmin ? '/admin/login' : '/login?portal=staff'); };
   const views: Record<string, React.ReactNode> = {
-    '': <P.Overview can={can} />, analytics: <AnalyticsPage />, customers: <P.Customers can={can} />, organizations: <P.Organizations can={can} />, sellers: <P.Sellers can={can} />, staff: <P.StaffRoles isAdmin={isAdmin} />,
+    '': <Dashboard can={can} />, analytics: <AnalyticsPage />, customers: <P.Customers can={can} />, organizations: <P.Organizations can={can} />, sellers: <P.Sellers can={can} />, staff: <P.StaffRoles isAdmin={isAdmin} />,
     moderation: <K.Moderation />, products: <K.Products can={can} />, categories: <K.Categories can={can} />, brands: <K.Brands />, inventory: <K.Inventory />, reviews: <K.Reviews />,
     orders: <C.Orders can={can} />, b2b: <C.B2B />, shipping: <C.Shipping can={can} />, returns: <C.Returns />, promotions: <C.Promotions />, coupons: <C.Coupons />,
     payments: <C.Payments />, refunds: <C.Refunds can={can} />, finance: <C.Finance can={can} />,

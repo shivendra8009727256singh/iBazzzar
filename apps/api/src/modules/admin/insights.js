@@ -91,6 +91,66 @@ export function registerAdminInsights(app, { prisma }) {
     });
   });
 
+  /** Second dashboard call: today vs yesterday, pipeline, leaders, mixes and live feeds. Loaded alongside the first. */
+  app.get('/api/admin/dashboard/extra', requireStaff('dashboard'), async (req, res) => {
+    const finance = req.can('finance.view');
+    const now = Date.now();
+    const todayStart = istStart(istDate(new Date(now)));
+    const yesterdayStart = new Date(todayStart.getTime() - DAY);
+    const d30 = new Date(now - 30 * DAY);
+    const d60 = new Date(now - 60 * DAY);
+    // Placed = real orders the customer committed to (paid, COD or credit), not cancelled.
+    const placed = Prisma.sql`NOT o.demo AND o."paymentStatus" NOT IN ('UNPAID','BANK_TRANSFER_PENDING','DEMO_SIMULATED') AND o.status <> 'CANCELLED'`;
+    const window = (from, to) => prisma.$queryRaw`SELECT COUNT(*)::int AS orders, COALESCE(SUM(o."totalPaise"), 0)::bigint AS gmv, COUNT(DISTINCT o."userId")::int AS buyers FROM orders o WHERE ${placed} AND o."createdAt" >= ${from} AND o."createdAt" < ${to}`;
+    const { lowStockThreshold } = await getSetting(prisma, 'platform');
+    const [[today], [yesterday], [last30], [prev30], pipeline, topProducts, topCategories, paymentMix, lowStock, newUsers, reviews, rating, b2b, liveProducts, activity] = await Promise.all([
+      window(todayStart, new Date(now + 60_000)), window(yesterdayStart, todayStart), window(d30, new Date(now + 60_000)), window(d60, d30),
+      prisma.$queryRaw`SELECT
+          COUNT(*) FILTER (WHERE status = 'AWAITING_PAYMENT')::int AS "awaitingPayment",
+          (SELECT COUNT(*) FROM seller_orders so JOIN orders o2 ON o2.id = so."orderId" WHERE so.status = 'PENDING' AND o2.status NOT IN ('AWAITING_PAYMENT','CANCELLED'))::int AS "toPack",
+          (SELECT COUNT(*) FROM seller_orders so JOIN orders o2 ON o2.id = so."orderId" WHERE so.status = 'PACKED' AND o2.status <> 'CANCELLED')::int AS "packed",
+          (SELECT COUNT(*) FROM seller_orders WHERE status = 'SHIPPED')::int AS "inTransit",
+          (SELECT COUNT(*) FROM seller_orders WHERE status = 'DELIVERED' AND "updatedAt" >= ${d30})::int AS "delivered30"
+        FROM orders`,
+      prisma.$queryRaw`SELECT oi."catalogProductId" AS id, MAX(oi.name) AS name, MAX(oi.image) AS image, SUM(oi.quantity)::int AS units, COALESCE(SUM(oi."totalPaise"), 0)::bigint AS gmv
+        FROM order_items oi JOIN orders o ON o.id = oi."orderId" WHERE ${placed} AND o."createdAt" >= ${d30} GROUP BY 1 ORDER BY gmv DESC LIMIT 5`,
+      prisma.$queryRaw`SELECT COALESCE(c.name, 'Other') AS name, COALESCE(SUM(oi."totalPaise"), 0)::bigint AS gmv, SUM(oi.quantity)::int AS units
+        FROM order_items oi JOIN orders o ON o.id = oi."orderId" LEFT JOIN catalog_products cp ON cp.id = oi."catalogProductId" LEFT JOIN categories c ON c.id = cp."categoryId"
+        WHERE ${placed} AND o."createdAt" >= ${d30} GROUP BY 1 ORDER BY gmv DESC LIMIT 6`,
+      prisma.$queryRaw`SELECT o."paymentMethod"::text AS method, COUNT(*)::int AS orders, COALESCE(SUM(o."totalPaise"), 0)::bigint AS gmv FROM orders o WHERE ${placed} AND o."createdAt" >= ${d30} GROUP BY 1 ORDER BY orders DESC`,
+      prisma.$queryRaw`SELECT l.id, cp.id AS "productId", cp.name, v.label AS variant, s.name AS seller, (b."onHand" - b.reserved)::int AS available
+        FROM seller_listings l JOIN inventory_balances b ON b."listingId" = l.id JOIN product_variants v ON v.id = l."variantId" JOIN catalog_products cp ON cp.id = v."catalogProductId" JOIN seller_stores s ON s.id = l."storeId"
+        WHERE l.status = 'APPROVED' AND b."onHand" - b.reserved <= ${lowStockThreshold} ORDER BY available ASC LIMIT 5`,
+      req.can('users.view') ? prisma.user.findMany({ where: { demo: false, roles: { none: {} } }, orderBy: { createdAt: 'desc' }, take: 5, select: { id: true, name: true, email: true, createdAt: true, _count: { select: { orders: true } } } }) : [],
+      prisma.review.findMany({ orderBy: { createdAt: 'desc' }, take: 4, select: { id: true, rating: true, title: true, authorName: true, createdAt: true, product: { select: { id: true, name: true } } } }),
+      prisma.review.aggregate({ where: { status: 'PUBLISHED' }, _avg: { rating: true }, _count: { _all: true } }),
+      req.can('b2b.view') ? Promise.all([
+        prisma.rfq.count({ where: { status: { in: ['OPEN', 'QUOTED'] } } }),
+        prisma.purchaseOrder.count({ where: { status: { in: ['PENDING_APPROVAL', 'APPROVED', 'CONFIRMED_BY_SELLER'] } } }),
+        prisma.order.aggregate({ where: { paymentStatus: 'ON_TERMS', status: { not: 'CANCELLED' } }, _sum: { totalPaise: true }, _count: { _all: true } }),
+        prisma.organization.count({ where: { status: 'APPROVED' } }),
+      ]) : null,
+      prisma.catalogProduct.count({ where: { status: 'APPROVED' } }),
+      req.can('audit.view') ? prisma.auditLog.findMany({ orderBy: { createdAt: 'desc' }, take: 8 }) : [],
+    ]);
+    const people = new Map((await prisma.user.findMany({ where: { id: { in: [...new Set(activity.map((a) => a.actorId).filter((x) => /^[0-9a-f-]{36}$/.test(x ?? '')))] } }, select: { id: true, name: true } })).map((u) => [u.id, u.name]));
+    const money = (v) => (finance ? n(v) : null);
+    const w = (x) => ({ orders: x.orders, buyers: x.buyers, gmvPaise: money(x.gmv) });
+    res.json({
+      today: w(today), yesterday: w(yesterday), last30: w(last30), prev30: w(prev30),
+      pipeline: pipeline[0],
+      topProducts: topProducts.map((p) => ({ id: p.id, name: p.name, image: p.image, units: p.units, gmvPaise: money(p.gmv) })),
+      topCategories: topCategories.map((c) => ({ name: c.name, units: c.units, gmvPaise: n(c.gmv) })),
+      paymentMix: paymentMix.map((p) => ({ method: p.method, orders: p.orders, gmvPaise: money(p.gmv) })),
+      lowStock: { threshold: lowStockThreshold, items: lowStock },
+      newCustomers: newUsers.map((u) => ({ id: u.id, name: u.name, email: u.email, createdAt: u.createdAt, orders: u._count.orders })),
+      reviews: { average: rating._avg.rating ? Math.round(rating._avg.rating * 10) / 10 : null, count: rating._count._all, latest: reviews },
+      b2b: b2b ? { openRfqs: b2b[0], openPurchaseOrders: b2b[1], creditOutstandingPaise: money(b2b[2]._sum.totalPaise ?? 0), creditOrders: b2b[2]._count._all, businesses: b2b[3] } : null,
+      liveProducts,
+      activity: activity.map((a) => ({ id: a.id, action: a.action, entityType: a.entityType, createdAt: a.createdAt, actor: a.actorId ? people.get(a.actorId) ?? 'Staff' : 'System' })),
+    });
+  });
+
   // ───────────── Summary cards (counts by status, new in the last 7 days, 14-day trend) ─────────────
   const SUMMARIES = {
     users: { cap: 'users.view', table: 'users', where: Prisma.sql`NOT demo`, statuses: {
