@@ -169,3 +169,26 @@
   .prose-page p, .prose-page li { color: #33443a; line-height: 1.75; }
   .prose-page blockquote { border-left: 3px solid var(--color-gold); padding: 8px 14px; background: var(--color-cream); color: var(--color-gold-ink); margin: 20px 0; }
 }
+
+/* ───────────── IBazzzar loader ───────────── */
+@keyframes ib-spin { to { transform: rotate(360deg); } }
+@keyframes ib-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+@keyframes ib-glow { 0%, 100% { opacity: 0.45; transform: scale(0.9); } 50% { opacity: 1; transform: scale(1.15); } }
+@keyframes ib-word { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@keyframes ib-dots { 0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75%, 100% { content: '...'; } }
+@keyframes ib-fade-in { from { opacity: 0; } to { opacity: 1; } }
+.ib-loader-spin { animation: ib-spin 1.1s cubic-bezier(0.55, 0.15, 0.45, 0.85) infinite; }
+.ib-loader-spin-reverse { animation: ib-spin 2.4s linear infinite reverse; }
+.ib-loader-mark { animation: ib-breathe 1.8s ease-in-out infinite; }
+.ib-loader-glow { animation: ib-glow 1.8s ease-in-out infinite; }
+.ib-loader-word {
+  background: linear-gradient(90deg, var(--color-forest) 0%, var(--color-forest) 35%, var(--color-gold-light) 50%, var(--color-forest) 65%, var(--color-forest) 100%);
+  background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: ib-word 2.2s linear infinite;
+}
+.ib-loader-dots::after { content: '...'; display: inline-block; width: 1.2em; text-align: left; animation: ib-dots 1.4s steps(1) infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .ib-loader-spin, .ib-loader-spin-reverse { animation-duration: 6s; }
+  .ib-loader-mark, .ib-loader-glow, .ib-loader-word, .ib-loader-dots::after { animation: none; }
+  .ib-loader-word { color: var(--color-forest); background: none; }
+}

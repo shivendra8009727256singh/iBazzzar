@@ -1,4 +1,5 @@
 'use client';
+import { BrandLoader } from './brand-loader';
 import { useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -6,7 +7,6 @@ import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/format';
 import type { User } from '@/lib/types';
 import { useSession } from './providers';
-import { Spinner } from './ui';
 
 export type NavItem = { href: string; label: string; icon: LucideIcon; exact?: boolean; badge?: number };
 
@@ -16,7 +16,7 @@ export function WorkspaceShell({ title, nav, children, header, gate }: { title: 
   const router = useRouter();
   const pathname = usePathname();
   useEffect(() => { if (!loading && !user) router.replace(`/login?next=${encodeURIComponent(pathname)}`); }, [loading, user, router, pathname]);
-  if (loading || !user) return <Spinner label="Checking your session" />;
+  if (loading || !user) return <BrandLoader fullScreen size="lg" label="Checking your session" />;
   const blocked = gate?.(user);
   const active = (n: NavItem) => (n.exact ? pathname === n.href : pathname === n.href || pathname.startsWith(`${n.href}/`));
   return (

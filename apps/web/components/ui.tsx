@@ -5,6 +5,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { Star, X, Loader2, ChevronLeft, ChevronRight, Inbox } from 'lucide-react';
 import { cn, formatMoney, label as toLabel, percentOff, STATUS_TONE } from '@/lib/format';
 import { ApiError } from '@/lib/api';
+import { BrandLoader } from './brand-loader';
 
 // ───────────── Form fields ─────────────
 type FieldProps = { label: string; hint?: string; error?: string; required?: boolean; className?: string; children: React.ReactElement<Record<string, unknown>> };
@@ -128,8 +129,9 @@ export function Empty({ icon, title, body, action }: { icon?: React.ReactNode; t
   );
 }
 
-export function Spinner({ label = 'Loading' }: { label?: string }) {
-  return <div className="flex items-center justify-center gap-2 py-12 text-muted" role="status"><Loader2 className="size-5 animate-spin" aria-hidden />{label}…</div>;
+/** Section and page loading: the IBazzzar loader. */
+export function Spinner({ label = 'Loading', size = 'md' }: { label?: string; size?: 'sm' | 'md' | 'lg' }) {
+  return <BrandLoader label={label} size={size} />;
 }
 
 /** Client-side paging via onChange, or link-based paging via hrefBase (a URL without the page param) for server pages. */

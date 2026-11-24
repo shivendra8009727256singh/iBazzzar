@@ -14,6 +14,7 @@ import { cn } from '@/lib/format';
 import { useSession } from '@/components/providers';
 import { Alert, Spinner } from '@/components/ui';
 import { GlobalSearch } from '@/components/admin/kit';
+import { BrandLoader } from '@/components/brand-loader';
 import * as P from '@/components/admin/people';
 import * as K from '@/components/admin/catalog';
 import * as C from '@/components/admin/commerce';
@@ -134,10 +135,10 @@ export default function AdminPage({ params }: { params: Promise<{ section?: stri
   // The server is the source of truth for permissions (the Admin can change them per role), so the menu follows it.
   const meta = useQuery({ queryKey: ['admin', 'meta', user?.id], queryFn: () => api<Meta>('/admin/meta'), enabled: !!user?.staffRole, staleTime: 30_000 });
   useEffect(() => { if (!loading && !user) router.replace('/login?portal=staff&next=/admin'); }, [loading, user, router]);
-  if (loading || !user) return <Spinner label="Checking staff access" />;
+  if (loading || !user) return <BrandLoader fullScreen size="lg" label="Checking staff access" />;
   if (!user.staffRole) return <div className="container-page py-20 text-center"><h1 className="text-3xl">Staff only</h1><p className="text-muted mt-2">This console is for IBazzzar staff. Your account doesn’t have a staff role.</p><Link href="/" className="btn btn-primary mt-6">Back to the store</Link></div>;
   if (meta.error) return <div className="container-page py-20"><Alert>{(meta.error as Error).message}</Alert></div>;
-  if (!meta.data) return <Spinner label="Loading your permissions" />;
+  if (!meta.data) return <BrandLoader fullScreen size="lg" label="Loading your permissions" />;
 
   const caps = meta.data.capabilities;
   const can = (c: string) => caps.includes(c);
