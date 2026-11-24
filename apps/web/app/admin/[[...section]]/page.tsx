@@ -57,6 +57,25 @@ const ITEMS: Item[] = [
 type Meta = { roles: string[]; capabilities: string[]; labels: Record<string, string> };
 const COLLAPSE_KEY = 'ib-admin-sidebar-collapsed';
 
+// Each section is a new page, so the sidebar is rebuilt on every click. Its scroll position is kept here (and in
+// sessionStorage for reloads) and put back the moment the new sidebar appears, so it doesn't jump to the top.
+let navScroll: number | null = null;
+function saveNavScroll(top: number) {
+  navScroll = top;
+  try { sessionStorage.setItem('ib-admin-nav-scroll', String(Math.round(top))); } catch { /* storage unavailable */ }
+}
+function restoreNavScroll(el: HTMLElement | null) {
+  if (!el) return;
+  if (navScroll === null) { try { navScroll = Number(sessionStorage.getItem('ib-admin-nav-scroll')) || 0; } catch { navScroll = 0; } }
+  el.scrollTop = navScroll;
+  // If the open section is out of view (e.g. arrived by link or search), bring it into view without moving the page.
+  const current = el.querySelector<HTMLElement>('[aria-current="page"]');
+  if (current) {
+    const top = current.offsetTop - el.offsetTop;
+    if (top < el.scrollTop || top + current.offsetHeight > el.scrollTop + el.clientHeight) el.scrollTop = Math.max(0, top - el.clientHeight / 3);
+  }
+}
+
 /** Closes a popover when the user clicks outside it or presses Escape. */
 function useDismiss(open: boolean, close: () => void) {
   const ref = useRef<HTMLDivElement>(null);
@@ -176,7 +195,7 @@ export default function AdminPage({ params }: { params: Promise<{ section?: stri
           <X size={17} />
         </button>
       </div>
-      <nav className={cn('flex-1 overflow-y-auto py-4 grid content-start gap-4', narrow ? 'lg:px-3 px-3' : 'px-3')}>
+      <nav ref={restoreNavScroll} onScroll={(e) => saveNavScroll(e.currentTarget.scrollTop)} className={cn('flex-1 overflow-y-auto py-4 grid content-start gap-4', narrow ? 'lg:px-3 px-3' : 'px-3')}>
         {groups.map((g) => (
           <div key={g}>
             <p className={cn('px-2.5 mb-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-muted/80', narrow && 'lg:hidden')}>{g}</p>
