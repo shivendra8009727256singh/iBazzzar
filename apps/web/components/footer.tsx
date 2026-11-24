@@ -7,7 +7,7 @@ import { Newsletter } from './newsletter';
 import { useSite } from './site-context';
 
 const COLUMNS = [
-  { title: 'Shop', links: [['All products', '/products'], ['Today’s deals', '/deals'], ['Brands', '/brands'], ['Stores', '/sellers'], ['Wishlist', '/wishlist']] },
+  { title: 'Shop', links: [['All products', '/products'], ['Today’s deals', '/deals'], ['Brands', '/brands'], ['Wishlist', '/wishlist']] },
   { title: 'Business', links: [['Wholesale catalogue', '/wholesale'], ['Request a quote', '/business/rfqs/new'], ['Business account', '/business'], ['Payment options', '/pages/payments']] },
   { title: 'Sellers', links: [['Sell with us', '/sell'], ['Seller hub', '/seller'], ['Seller agreement', '/pages/seller-agreement']] },
   { title: 'Help', links: [['Help centre', '/support'], ['Track an order', '/account/orders'], ['Returns & refunds', '/pages/returns'], ['Shipping & delivery', '/pages/shipping'], ['Contact support', '/support']] },
