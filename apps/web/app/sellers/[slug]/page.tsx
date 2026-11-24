@@ -31,7 +31,7 @@ export default async function StorePage({ params, searchParams }: { params: Prom
   return (
     <div className="bg-[#f3f5f0] -mb-16 pb-16">
       <div className="container-page py-5 md:py-6 grid grid-cols-[minmax(0,1fr)] gap-5 md:gap-6">
-        <nav aria-label="Breadcrumb" className="flex items-center gap-1 text-sm text-muted"><Link href="/" className="hover:text-forest">Home</Link><ChevronRight size={14} /><Link href="/sellers" className="hover:text-forest">Stores</Link><ChevronRight size={14} /><span className="text-ink font-medium truncate">{s.name}</span></nav>
+        <nav aria-label="Breadcrumb" className="flex items-center gap-1 text-sm text-muted"><Link href="/" className="hover:text-forest">Home</Link><ChevronRight size={14} /><span className="text-ink font-medium truncate">{s.name}</span></nav>
 
         <section className="rounded-3xl bg-white border border-line shadow-card overflow-hidden">
           <div className="relative h-36 md:h-48 bg-[linear-gradient(120deg,#062a1e_0%,#0d3d2c_45%,#c99a3d_130%)]">
