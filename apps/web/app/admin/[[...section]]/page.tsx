@@ -170,9 +170,10 @@ export default function AdminPage({ params }: { params: Promise<{ section?: stri
           <Image src="/branding/ibazzzar-logo.png" alt="IBazzzar" width={1621} height={685} sizes="150px" className={cn('h-auto w-[150px]', narrow && 'lg:hidden')} priority />
           <span className={cn('self-start rounded-full bg-[#f7ecd2] text-gold-ink text-[10.5px] font-bold tracking-[0.14em] uppercase px-2.5 py-0.5', narrow && 'lg:hidden')}>Admin panel</span>
         </Link>
-        <button type="button" onClick={() => (mobileOpen ? setMobileOpen(false) : toggleCollapsed())} aria-label={mobileOpen ? 'Close menu' : collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          className={cn('ml-auto size-9 rounded-lg border border-line grid place-items-center text-muted hover:text-forest hover:border-forest shrink-0', narrow && 'lg:ml-0')}>
-          {mobileOpen ? <X size={17} /> : collapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}
+        {/* Phones only: close the drawer. On desktop the top-bar button collapses the sidebar. */}
+        <button type="button" onClick={() => setMobileOpen(false)} aria-label="Close menu"
+          className="lg:hidden ml-auto size-9 rounded-lg border border-line grid place-items-center text-muted hover:text-forest hover:border-forest shrink-0">
+          <X size={17} />
         </button>
       </div>
       <nav className={cn('flex-1 overflow-y-auto py-4 grid content-start gap-4', narrow ? 'lg:px-3 px-3' : 'px-3')}>
