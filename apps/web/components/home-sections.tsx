@@ -1,53 +1,118 @@
 'use client';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { ChevronLeft, ChevronRight, Copy, Check, Star, ArrowRight, TicketPercent } from 'lucide-react';
 import type { Product } from '@/lib/types';
 import { cn, formatMoney, percentOff } from '@/lib/format';
 
-/** Compact product tile for horizontal rows. */
-export function MiniProductCard({ p, badge }: { p: Product; badge?: string }) {
+/** Soft backgrounds behind product art, so simple illustrations and cut-outs read as styled tiles. */
+export const TILE_BG = ['bg-[#f4efe2]', 'bg-[#e8f0ea]', 'bg-[#eaf0f7]', 'bg-[#f3ecf7]', 'bg-[#fbece6]', 'bg-[#eef3e3]'];
+
+const ratingTone = (r: number) => (r >= 4 ? 'bg-success' : r >= 3 ? 'bg-[#c27c0e]' : 'bg-danger');
+
+/** Compact product tile for horizontal rows: tinted art, optional rank, rating, price and saving. */
+export function MiniProductCard({ p, badge, rank, tone = 0 }: { p: Product; badge?: string; rank?: number; tone?: number }) {
   const off = percentOff(p.pricePaise, p.mrpPaise);
+  const save = Math.max(0, p.mrpPaise - p.pricePaise);
   return (
-    <Link href={`/products/${p.slug}`} className="group snap-start w-[168px] sm:w-[196px] shrink-0 rounded-2xl border border-line bg-white overflow-hidden hover:shadow-lift hover:-translate-y-0.5 transition duration-300">
-      <div className="relative aspect-square bg-white">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_45%,#f6f1e2,transparent_68%)]" aria-hidden />
-        <Image src={p.image} alt={p.name} fill sizes="196px" className="object-contain p-6 transition-transform duration-500 group-hover:scale-[1.07]" unoptimized={p.image.startsWith('/api/')} />
-        {(badge || p.promotion) && <span className="absolute top-2.5 left-2.5 rounded-md bg-danger text-white text-[10.5px] font-bold px-1.5 py-0.5">{badge ?? `${Math.round((p.promotion?.discountBps ?? 0) / 100)}% OFF`}</span>}
+    <Link href={`/products/${p.slug}`} className="group snap-start w-[160px] sm:w-[188px] shrink-0 flex flex-col">
+      <div className={cn('relative aspect-[4/5] rounded-2xl overflow-hidden', TILE_BG[tone % TILE_BG.length])}>
+        <span className="absolute inset-x-6 bottom-5 h-4 rounded-[50%] bg-black/[0.06] blur-md" aria-hidden />
+        <Image src={p.image} alt={p.name} fill sizes="188px" className="object-contain p-6 transition-transform duration-500 group-hover:scale-[1.08] group-hover:-translate-y-1" unoptimized={p.image.startsWith('/api/')} />
+        {rank != null && <span className="absolute left-0 top-0 rounded-br-2xl bg-ink text-white font-display text-xl leading-none px-3 py-2">#{rank}</span>}
+        {(badge || p.promotion) && <span className="absolute top-2.5 right-2.5 rounded-full bg-danger text-white text-[10.5px] font-bold px-2 py-0.5 shadow-card">{badge ?? `${Math.round((p.promotion?.discountBps ?? 0) / 100)}% OFF`}</span>}
+        {p.rating && <span className="absolute left-2.5 bottom-2.5 inline-flex items-center gap-1 rounded-full bg-white/95 shadow-card px-2 py-0.5 text-[11px] font-bold"><span className={cn('inline-flex items-center gap-0.5 rounded-full px-1.5 text-white', ratingTone(p.rating.average))}>{p.rating.average.toFixed(1)}<Star size={8} fill="currentColor" /></span><span className="text-muted font-medium">{p.rating.count}</span></span>}
       </div>
-      <div className="p-3 border-t border-line/70">
+      <div className="pt-2.5 px-0.5">
         <p className="text-[11px] font-bold uppercase tracking-wider text-gold-ink truncate">{p.brand}</p>
-        <p className="text-[13.5px] font-semibold leading-snug line-clamp-2 min-h-[2.5em] group-hover:text-forest">{p.name}</p>
-        {p.rating && <p className="mt-1 flex items-center gap-1 text-[11.5px] text-muted"><span className={cn('inline-flex items-center gap-0.5 rounded px-1 text-[11px] font-bold text-white', p.rating.average >= 4 ? 'bg-success' : p.rating.average >= 3 ? 'bg-[#c27c0e]' : 'bg-danger')}>{p.rating.average.toFixed(1)}<Star size={9} fill="currentColor" /></span>({p.rating.count})</p>}
-        <p className="mt-1.5 flex flex-wrap items-baseline gap-1.5"><span className="font-bold tabular-nums">{formatMoney(p.pricePaise)}</span>{off > 0 && <><span className="text-[11.5px] text-muted line-through">{formatMoney(p.mrpPaise)}</span><span className="text-[11.5px] font-bold text-success">{off}% off</span></>}</p>
+        <p className="text-[13.5px] font-medium leading-snug line-clamp-2 min-h-[2.5em] text-ink/85 group-hover:text-forest">{p.name}</p>
+        <p className="mt-1 flex flex-wrap items-baseline gap-x-1.5"><span className="font-bold text-[15px] tabular-nums">{formatMoney(p.pricePaise)}</span>{off > 0 && <><span className="text-[11.5px] text-muted line-through">{formatMoney(p.mrpPaise)}</span><span className="text-[11.5px] font-bold text-success">{off}% off</span></>}</p>
+        {save >= 10000 && <p className="text-[11px] text-success font-semibold">Save {formatMoney(save)}</p>}
       </div>
     </Link>
   );
 }
 
+/** Section heading with a short gold accent, shared by the homepage blocks. */
+export function SectionHead({ title, subtitle, action, light }: { title: React.ReactNode; subtitle?: React.ReactNode; action?: React.ReactNode; light?: boolean }) {
+  return (
+    <div className="flex flex-wrap items-end justify-between gap-3 mb-4 md:mb-5">
+      <div className="min-w-0">
+        <span className="block h-1 w-10 rounded-full bg-gradient-to-r from-gold to-gold-light mb-2" aria-hidden />
+        <h2 className={cn('text-[22px] md:text-[28px] flex items-center gap-3 flex-wrap leading-tight', light && 'text-white')}>{title}</h2>
+        {subtitle && <p className={cn('text-sm mt-1', light ? 'text-white/70' : 'text-muted')}>{subtitle}</p>}
+      </div>
+      {action}
+    </div>
+  );
+}
+
 /** A titled, horizontally scrolling row with arrow buttons on wide screens. */
-export function Rail({ title, subtitle, href, products, accent, children }: { title: string; subtitle?: React.ReactNode; href?: string; products?: Product[]; accent?: React.ReactNode; children?: React.ReactNode }) {
+export function Rail({ title, subtitle, href, products, accent, children, ranked, className }: { title: string; subtitle?: React.ReactNode; href?: string; products?: Product[]; accent?: React.ReactNode; children?: React.ReactNode; ranked?: boolean; className?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const scroll = (dir: number) => ref.current?.scrollBy({ left: dir * (ref.current.clientWidth * 0.85), behavior: 'smooth' });
   if (products && !products.length) return null;
   return (
-    <section className="rounded-3xl bg-white border border-line shadow-card p-4 md:p-6">
-      <div className="flex flex-wrap items-end justify-between gap-3 mb-4">
-        <div className="min-w-0">
-          <h2 className="text-2xl md:text-[28px] flex items-center gap-3 flex-wrap">{title}{accent}</h2>
-          {subtitle && <p className="text-sm text-muted mt-1">{subtitle}</p>}
-        </div>
+    <section className={cn('rounded-3xl bg-white border border-line shadow-card p-4 md:p-6 min-w-0', className)}>
+      <SectionHead title={<>{title}{accent}</>} subtitle={subtitle} action={
         <div className="flex items-center gap-2">
           <button type="button" aria-label={`Scroll ${title} left`} onClick={() => scroll(-1)} className="hidden md:grid size-9 place-items-center rounded-full border border-line hover:border-forest hover:text-forest"><ChevronLeft size={18} /></button>
           <button type="button" aria-label={`Scroll ${title} right`} onClick={() => scroll(1)} className="hidden md:grid size-9 place-items-center rounded-full border border-line hover:border-forest hover:text-forest"><ChevronRight size={18} /></button>
           {href && <Link href={href} className="btn btn-primary btn-sm rounded-full">View all<ArrowRight size={15} /></Link>}
         </div>
-      </div>
+      } />
       <div ref={ref} className="flex gap-3 md:gap-4 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-1 -mx-1 px-1">
-        {children ?? products?.map((p, i) => <MiniProductCard key={`${p.listingId}:${i}`} p={p} />)}
+        {children ?? products?.map((p, i) => <MiniProductCard key={`${p.listingId}:${i}`} p={p} tone={i} rank={ranked ? i + 1 : undefined} />)}
       </div>
     </section>
+  );
+}
+
+/** Amazon-style card: a theme with four products in a 2×2 grid and a "see more" link. */
+export function QuadCard({ title, href, cta, products, tone = 0, tags }: { title: string; href: string; cta: string; products: Product[]; tone?: number; tags?: string[] }) {
+  if (products.length < 2) return null;
+  return (
+    <section className="rounded-3xl bg-white border border-line shadow-card p-4 md:p-5 flex flex-col min-w-0 max-sm:w-[78%] max-sm:shrink-0 snap-start">
+      <h2 className="text-[19px] md:text-[21px] leading-tight">{title}</h2>
+      <div className="grid grid-cols-2 gap-2.5 mt-3 flex-1">
+        {products.slice(0, 4).map((p, i) => (
+          <Link key={`${p.listingId}:${i}`} href={`/products/${p.slug}`} className="group min-w-0">
+            <span className={cn('relative block aspect-square rounded-xl overflow-hidden', TILE_BG[(tone + i) % TILE_BG.length])}>
+              <Image src={p.image} alt="" fill sizes="140px" className="object-contain p-4 transition-transform duration-500 group-hover:scale-110" unoptimized={p.image.startsWith('/api/')} />
+            </span>
+            <span className="block text-[12px] text-ink/80 mt-1.5 truncate group-hover:text-forest">{p.name}</span>
+            <span className="block text-[12px] font-bold text-success truncate">{tags?.[i] ?? formatMoney(p.pricePaise)}</span>
+          </Link>
+        ))}
+      </div>
+      <Link href={href} className="mt-3 text-[13.5px] font-semibold text-forest inline-flex items-center gap-1 hover:gap-2 transition-all">{cta}<ArrowRight size={14} /></Link>
+    </section>
+  );
+}
+
+/** Big ticking timer for the deal of the day (client-only time to avoid hydration mismatch). */
+export function CountdownBoxes({ endsAt, startsAt }: { endsAt: string; startsAt?: string }) {
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => { setNow(Date.now()); const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
+  const upcoming = !!startsAt && now != null && Date.parse(startsAt) > now;
+  const ms = now == null ? 0 : Math.max(0, (upcoming ? Date.parse(startsAt!) : Date.parse(endsAt)) - now);
+  const parts = [['Hrs', Math.floor(ms / 3_600_000)], ['Min', Math.floor(ms / 60_000) % 60], ['Sec', Math.floor(ms / 1000) % 60]] as const;
+  return (
+    <div aria-label={upcoming ? 'Starts in' : 'Ends in'}>
+      <p className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/75">{upcoming ? 'Starts in' : 'Ends in'}</p>
+      <div className="mt-2 flex items-center gap-1.5">
+        {parts.map(([label, v], i) => (
+          <span key={label} className="flex items-center gap-1.5">
+            <span className="grid place-items-center min-w-[54px] rounded-xl bg-white text-[#9f1d17] px-2 py-1.5 shadow-lift">
+              <span className="font-display text-[26px] leading-none tabular-nums">{now == null ? '--' : String(v).padStart(2, '0')}</span>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#9f1d17]/70 mt-0.5">{label}</span>
+            </span>
+            {i < 2 && <span className="font-display text-2xl text-white/80">:</span>}
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }
 

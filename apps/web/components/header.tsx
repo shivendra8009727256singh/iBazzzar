@@ -30,7 +30,6 @@ const NAV = [
   { href: '/', label: 'Home' },
   { href: '/deals', label: 'Deals' },
   { href: '/brands', label: 'Brands' },
-  { href: '/sellers', label: 'Stores' },
   { href: '/wholesale', label: 'Wholesale' },
   { href: '/sell', label: 'Become a Seller' },
 ];
