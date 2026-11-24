@@ -16,7 +16,11 @@ type Home = {
   rails: { trending: Product[]; bestSellers: Product[]; newArrivals: Product[]; topRated: Product[]; deals: Product[] };
   sections: Record<string, { heading: string; body: string; data: { ctaLabel?: string; ctaLink?: string } }>;
   sellers: { id: string; slug: string; name: string; description: string; primaryCategory: string | null }[];
+  homeDeal?: Partial<HomeDeal>;
 };
+/** Admin → Homepage & content → Homepage deal block. Empty promotionId = the live deal ending soonest. */
+type HomeDeal = { enabled: boolean; promotionId: string; label: string; ctaLabel: string; bgFrom: string; bgVia: string; bgTo: string; showTimer: boolean; showOtherDeals: boolean };
+const HOME_DEAL_DEFAULTS: HomeDeal = { enabled: true, promotionId: '', label: 'Deal of the day', ctaLabel: 'All deals', bgFrom: '#5c1010', bgVia: '#b42318', bgTo: '#e0892b', showTimer: true, showOtherDeals: true };
 type Deals = { deals: { id: string; name: string; description: string; discountBps: number; startsAt: string; endsAt: string; live: boolean; products: Product[] }[] };
 type Offer = { code: string; description: string; kind: string; value: number; minOrderPaise: number; endsAt: string };
 type Brand = { id: string; name: string; slug: string; verified: boolean; products: number; image: string | null; category: string | null };
@@ -50,7 +54,11 @@ export default async function HomePage() {
   const wholesale = home?.sections.wholesale;
   const sell = home?.sections.sell;
   const categories = (cats?.categories ?? []).filter((c) => !c.parentId);
-  const liveDeal = deals?.deals.find((d) => d.live) ?? deals?.deals[0];
+  const homeDeal = { ...HOME_DEAL_DEFAULTS, ...(home?.homeDeal ?? {}) };
+  const allDeals = deals?.deals ?? []; // live first-ending first, as the API sorts them
+  // The admin's chosen deal if it is still running or scheduled, else the live deal ending soonest, else the next one.
+  const liveDeal = homeDeal.enabled ? (allDeals.find((d) => d.id === homeDeal.promotionId) ?? allDeals.find((d) => d.live) ?? allDeals[0]) : undefined;
+  const otherLive = homeDeal.showOtherDeals ? allDeals.filter((d) => d.live && d.id !== liveDeal?.id) : [];
   const topBrands = [...(brands?.brands ?? [])].sort((a, b) => b.products - a.products).slice(0, 8);
   const coupon = offers?.offers[0];
 
@@ -112,18 +120,26 @@ export default async function HomePage() {
         {/* Deal of the day */}
         {liveDeal && liveDeal.products.length > 0 && (
           <section className="grid lg:grid-cols-[300px_minmax(0,1fr)] rounded-3xl overflow-hidden shadow-lift bg-white border border-line">
-            <div className="relative overflow-hidden p-5 md:p-7 text-white bg-[linear-gradient(150deg,#5c1010_0%,#b42318_55%,#e0892b_100%)] flex flex-col justify-between gap-5">
+            <div className="relative overflow-hidden p-5 md:p-7 text-white flex flex-col justify-between gap-5" style={{ background: `linear-gradient(150deg, ${homeDeal.bgFrom} 0%, ${homeDeal.bgVia} 55%, ${homeDeal.bgTo} 100%)` }}>
               <span className="absolute -right-16 -top-16 size-56 rounded-full bg-white/10" aria-hidden />
               <span className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_1px_1px,white_1px,transparent_0)] [background-size:18px_18px]" aria-hidden />
               <div className="relative">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em]"><Flame size={13} />{liveDeal.live ? 'Deal of the day' : 'Coming up'}</span>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em]"><Flame size={13} />{liveDeal.live ? homeDeal.label : 'Coming up'}</span>
                 <h2 className="text-[26px] md:text-[32px] text-white mt-3 leading-tight">{liveDeal.name}</h2>
                 <p className="text-white/80 text-sm mt-1">{liveDeal.description}</p>
                 <p className="mt-3 font-display text-[44px] leading-none">{Math.round(liveDeal.discountBps / 100)}%<span className="text-lg font-sans font-bold ml-1">OFF</span></p>
               </div>
               <div className="relative grid gap-4">
-                <CountdownBoxes endsAt={liveDeal.endsAt} startsAt={liveDeal.live ? undefined : liveDeal.startsAt} />
-                <Link href="/deals" className="btn bg-white text-[#9f1d17] hover:bg-ivory rounded-full justify-self-start">All deals<ArrowRight size={16} /></Link>
+                {homeDeal.showTimer && <CountdownBoxes endsAt={liveDeal.endsAt} startsAt={liveDeal.live ? undefined : liveDeal.startsAt} />}
+                <Link href={`/deals#deal-${liveDeal.id}`} className="btn bg-white text-ink hover:bg-ivory rounded-full justify-self-start">{homeDeal.ctaLabel}<ArrowRight size={16} /></Link>
+                {otherLive.length > 0 && (
+                  <div className="grid gap-1.5">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/70">Also live now</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {otherLive.slice(0, 4).map((d) => <Link key={d.id} href={`/deals#deal-${d.id}`} className="rounded-full bg-white/15 hover:bg-white hover:text-ink border border-white/20 px-3 py-1 text-[12.5px] font-semibold transition">{d.name} · {Math.round(d.discountBps / 100)}%</Link>)}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
             <div className="flex gap-3 md:gap-4 overflow-x-auto no-scrollbar p-4 md:p-6 snap-x items-start min-w-0">

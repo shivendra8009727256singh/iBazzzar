@@ -27,19 +27,22 @@ export function registerAdminPlatform(app, { prisma, storage, mailer }) {
 
   // ───────────── Homepage sections (optimistic versioning prevents two editors overwriting each other) ─────────────
   app.get('/api/admin/cms', cms, async (_req, res) => {
-    const [sections, pages, banners, featured, dealsHero] = await Promise.all([
+    const [sections, pages, banners, featured, dealsHero, homeDeal, promotions] = await Promise.all([
       prisma.homeSection.findMany(),
       prisma.cmsPage.findMany({ orderBy: { slug: 'asc' } }),
       prisma.banner.findMany({ orderBy: [{ placement: 'asc' }, { sortOrder: 'asc' }] }),
       prisma.catalogProduct.findMany({ where: { featured: true }, select: { id: true, name: true, status: true } }),
       getSetting(prisma, 'dealsHero'),
+      getSetting(prisma, 'homeDeal'),
+      // Deals that are live or still to come, for the homepage block's picker.
+      prisma.promotion.findMany({ where: { endsAt: { gt: new Date() } }, orderBy: { startsAt: 'asc' }, take: 50, select: { id: true, name: true, discountBps: true, startsAt: true, endsAt: true, active: true } }),
     ]);
     res.json({
       sections: Object.entries(HOME_SECTIONS).map(([id, label]) => {
         const s = sections.find((x) => x.id === id);
         return { id, label, heading: s?.heading ?? '', body: s?.body ?? '', data: s?.data ?? {}, published: s?.published ?? false, version: s?.version ?? 0, updatedAt: s?.updatedAt ?? null };
       }),
-      pages, banners, featured, dealsHero,
+      pages, banners, featured, dealsHero, homeDeal, promotions,
     });
   });
 
@@ -49,6 +52,17 @@ export function registerAdminPlatform(app, { prisma, storage, mailer }) {
     eyebrow: z.string().trim().max(40), title: z.string().trim().max(60), subtitle: z.string().trim().max(220), ctaLabel: z.string().trim().max(40),
     bgFrom: hex, bgVia: hex, bgTo: hex, showTimer: z.boolean(), showProducts: z.boolean(), fillWithDiscounted: z.boolean(),
   }).partial();
+  const homeDealInput = z.object({
+    enabled: z.boolean(), promotionId: z.union([z.literal(''), uuid]), label: z.string().trim().min(2).max(40), ctaLabel: z.string().trim().min(2).max(30),
+    bgFrom: hex, bgVia: hex, bgTo: hex, showTimer: z.boolean(), showOtherDeals: z.boolean(),
+  }).partial();
+  app.put('/api/admin/home-deal', cms, async (req, res) => {
+    const patch = homeDealInput.parse(req.body);
+    if (patch.promotionId && !(await prisma.promotion.findUnique({ where: { id: patch.promotionId } }))) throw new DomainError('That deal no longer exists', 404);
+    const value = await putSetting(prisma, 'homeDeal', patch, req.user.id);
+    await audit(prisma, { actorId: req.user.id, action: 'settings.home-deal-updated', entityType: 'setting', entityId: 'homeDeal', metadata: patch });
+    res.json({ homeDeal: value });
+  });
   app.put('/api/admin/deals-hero', cms, async (req, res) => {
     const patch = dealsHeroInput.parse(req.body);
     const value = await putSetting(prisma, 'dealsHero', patch, req.user.id);

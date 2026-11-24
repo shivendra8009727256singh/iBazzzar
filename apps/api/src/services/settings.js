@@ -21,6 +21,12 @@ export const DEFAULTS = {
     eyebrow: 'Today’s deals', title: '', subtitle: 'Real start and end times. Prices go back to normal when the timer ends — no fake urgency, no inflated MRPs.',
     ctaLabel: '', bgFrom: '#3d0808', bgVia: '#c8331f', bgTo: '#e8902d', showTimer: true, showProducts: true, fillWithDiscounted: true,
   },
+  // The homepage "Deal of the day" block. Empty promotionId = automatic (the live deal ending soonest).
+  // Changed in Admin → Homepage & content → Homepage deal block.
+  homeDeal: {
+    enabled: true, promotionId: '', label: 'Deal of the day', ctaLabel: 'All deals',
+    bgFrom: '#5c1010', bgVia: '#b42318', bgTo: '#e0892b', showTimer: true, showOtherDeals: true,
+  },
 };
 
 export async function getSetting(db, key) {

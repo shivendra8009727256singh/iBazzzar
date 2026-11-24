@@ -21,7 +21,7 @@ export function MiniProductCard({ p, badge, rank, tone = 0 }: { p: Product; badg
         <span className="absolute inset-x-6 bottom-5 h-4 rounded-[50%] bg-black/[0.06] blur-md" aria-hidden />
         <Image src={p.image} alt={p.name} fill sizes="188px" className="object-contain p-6 transition-transform duration-500 group-hover:scale-[1.08] group-hover:-translate-y-1" unoptimized={p.image.startsWith('/api/')} />
         {rank != null && <span className="absolute left-0 top-0 rounded-br-2xl bg-ink text-white font-display text-xl leading-none px-3 py-2">#{rank}</span>}
-        {(badge || p.promotion) && <span className="absolute top-2.5 right-2.5 rounded-full bg-danger text-white text-[10.5px] font-bold px-2 py-0.5 shadow-card">{badge ?? `${Math.round((p.promotion?.discountBps ?? 0) / 100)}% OFF`}</span>}
+        {(badge || p.promotion) && <span className="absolute top-2.5 right-2.5 rounded-full bg-danger text-white text-[10.5px] font-bold px-2 py-0.5 shadow-card">{badge ?? `DEAL · ${Math.round((p.promotion?.discountBps ?? 0) / 100)}% OFF`}</span>}
         {p.rating && <span className="absolute left-2.5 bottom-2.5 inline-flex items-center gap-1 rounded-full bg-white/95 shadow-card px-2 py-0.5 text-[11px] font-bold"><span className={cn('inline-flex items-center gap-0.5 rounded-full px-1.5 text-white', ratingTone(p.rating.average))}>{p.rating.average.toFixed(1)}<Star size={8} fill="currentColor" /></span><span className="text-muted font-medium">{p.rating.count}</span></span>}
       </div>
       <div className="pt-2.5 px-0.5">

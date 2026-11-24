@@ -319,3 +319,91 @@ export function DealsHeroForm({ value, refetch }: { value: DealsHeroSettings; re
     </section>
   );
 }
+
+// ───────────── Homepage deal block ─────────────
+export type HomeDealSettings = { enabled: boolean; promotionId: string; label: string; ctaLabel: string; bgFrom: string; bgVia: string; bgTo: string; showTimer: boolean; showOtherDeals: boolean };
+export type PromotionOption = { id: string; name: string; discountBps: number; startsAt: string; endsAt: string; active: boolean };
+
+/** Which deal the homepage features, and how the block looks. Products, prices and the timer come from the deal. */
+export function HomeDealForm({ value, promotions, refetch }: { value: HomeDealSettings; promotions: PromotionOption[]; refetch: () => void }) {
+  const [f, setF] = useState<HomeDealSettings>(value);
+  const [saving, setSaving] = useState(false);
+  const set = (patch: Partial<HomeDealSettings>) => setF((x) => ({ ...x, ...patch }));
+  const dirty = JSON.stringify(f) !== JSON.stringify(value);
+  const [now] = useState(() => Date.now()); // fixed when the form opens; only used to label deals live or scheduled
+  const stateOf = (p: PromotionOption) => (!p.active ? 'paused' : Date.parse(p.startsAt) > now ? 'scheduled' : 'live');
+  const chosen = promotions.find((p) => p.id === f.promotionId);
+  const missing = !!f.promotionId && !chosen;
+  const save = async () => {
+    setSaving(true);
+    try { await put('/admin/home-deal', f); toast.success('Homepage deal block saved. It shows on the homepage within a minute.'); refetch(); }
+    catch (e) { toast.error((e as Error).message); } finally { setSaving(false); }
+  };
+  const bg = `linear-gradient(150deg, ${hexOk(f.bgFrom) ? f.bgFrom : '#000'} 0%, ${hexOk(f.bgVia) ? f.bgVia : '#333'} 55%, ${hexOk(f.bgTo) ? f.bgTo : '#666'} 100%)`;
+  return (
+    <section className="card card-pad grid gap-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div><h2 className="text-lg">Homepage deal block</h2><p className="text-sm text-muted">The “Deal of the day” panel on the homepage. Its products, prices, discount and timer come from the deal you pick.</p></div>
+        <Checkbox checked={f.enabled} onChange={(e) => set({ enabled: e.target.checked })} label="Show on the homepage" />
+      </div>
+
+      <div className={`grid gap-4 md:grid-cols-[260px_1fr] items-stretch ${f.enabled ? '' : 'opacity-50'}`}>
+        <div className="rounded-2xl p-5 text-white grid gap-3 content-between min-h-[200px]" style={{ background: bg }}>
+          <div>
+            <span className="inline-flex rounded-full bg-white/15 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em]">{f.label || '—'}</span>
+            <p className="font-display text-2xl mt-2">{chosen?.name ?? 'Live deal ending soonest'}</p>
+            <p className="font-display text-3xl">{chosen ? `${Math.round(chosen.discountBps / 100)}% OFF` : 'NN% OFF'}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            {f.showTimer && <span className="rounded-lg bg-white text-ink px-2 py-0.5 font-semibold">01 : 18 : 10</span>}
+            <span className="rounded-full bg-white text-ink px-3 py-1 font-semibold">{f.ctaLabel || '—'} →</span>
+          </div>
+        </div>
+        <div className="grid gap-3 content-start">
+          <Field label="Which deal to feature" error={missing ? 'The chosen deal has ended or was removed; the homepage is using the automatic choice.' : undefined}>
+            <Select value={f.promotionId} onChange={(e) => set({ promotionId: e.target.value })}>
+              <option value="">Automatic — the live deal ending soonest</option>
+              {promotions.map((p) => <option key={p.id} value={p.id}>{p.name} · {Math.round(p.discountBps / 100)}% · {stateOf(p)} · ends {formatDateTime(p.endsAt)}</option>)}
+            </Select>
+          </Field>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Label"><Input value={f.label} maxLength={40} onChange={(e) => set({ label: e.target.value })} /></Field>
+            <Field label="Button text"><Input value={f.ctaLabel} maxLength={30} onChange={(e) => set({ ctaLabel: e.target.value })} /></Field>
+          </div>
+          <Checkbox checked={f.showTimer} onChange={(e) => set({ showTimer: e.target.checked })} label="Show the countdown" />
+          <Checkbox checked={f.showOtherDeals} onChange={(e) => set({ showOtherDeals: e.target.checked })} label="List other live deals as quick links" />
+        </div>
+      </div>
+
+      <div className="grid gap-3">
+        <p className="text-sm font-semibold">Background</p>
+        <div className="flex flex-wrap gap-2">
+          {DEAL_PRESETS.map(([name, a, b, c]) => {
+            const on = f.bgFrom === a && f.bgVia === b && f.bgTo === c;
+            return (
+              <button key={name} type="button" onClick={() => set({ bgFrom: a, bgVia: b, bgTo: c })} aria-pressed={on}
+                className={`flex items-center gap-2 rounded-full border pl-1 pr-3 py-1 text-[13px] font-semibold hover:border-forest ${on ? 'border-forest bg-mint' : 'border-line'}`}>
+                <span className="size-6 rounded-full" style={{ background: `linear-gradient(115deg, ${a}, ${b}, ${c})` }} />{name}
+              </button>
+            );
+          })}
+        </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          {([['bgFrom', 'Top colour'], ['bgVia', 'Middle colour'], ['bgTo', 'Bottom colour']] as const).map(([k, label]) => (
+            <Field key={k} label={label} error={hexOk(f[k]) ? undefined : 'Use a colour like #b42318'}>
+              <div className="flex items-center gap-2">
+                <input type="color" aria-label={`Pick ${label.toLowerCase()}`} value={hexOk(f[k]) ? f[k] : '#000000'} onChange={(e) => set({ [k]: e.target.value })} className="h-11 w-14 rounded-lg border border-line cursor-pointer bg-white p-1" />
+                <Input value={f[k]} onChange={(e) => set({ [k]: e.target.value })} />
+              </div>
+            </Field>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex gap-2">
+        <Button onClick={save} disabled={!dirty || saving || ![f.bgFrom, f.bgVia, f.bgTo].every(hexOk) || f.label.trim().length < 2 || f.ctaLabel.trim().length < 2}>{saving ? 'Saving…' : 'Save deal block'}</Button>
+        {dirty && <Button variant="ghost" onClick={() => setF(value)}>Discard changes</Button>}
+      </div>
+    </section>
+  );
+}

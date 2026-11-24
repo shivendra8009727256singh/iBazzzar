@@ -211,7 +211,7 @@ export function registerCatalog(app, { prisma }) {
   /** One call for the homepage: curated rails computed from real orders, reviews and admin choices. */
   app.get('/api/home', async (_req, res) => {
     const take = { take: 8, skip: 0 };
-    const [featuredRows, popular, newest, rated, deals, sections, stores] = await Promise.all([
+    const [featuredRows, popular, newest, rated, deals, sections, stores, homeDeal] = await Promise.all([
       prisma.catalogProduct.findMany({ where: { featured: true, status: 'APPROVED' }, select: { id: true }, take: 8, orderBy: { updatedAt: 'desc' } }),
       searchCatalog(prisma, { sort: 'popular', inStock: true }, take),
       searchCatalog(prisma, { sort: 'newest', inStock: true }, take),
@@ -219,6 +219,7 @@ export function registerCatalog(app, { prisma }) {
       searchCatalog(prisma, { sort: 'discount', deals: true }, take),
       prisma.homeSection.findMany({ where: { published: true } }),
       prisma.sellerStore.findMany({ where: { status: 'APPROVED' }, include: { primaryCategory: true }, take: 6, orderBy: { createdAt: 'asc' } }),
+      getSetting(prisma, 'homeDeal'),
     ]);
     const [featured, bestSellers, newArrivals, topRated, dealCards] = await Promise.all([
       productCards(prisma, featuredRows.map((r) => r.id)), productCards(prisma, popular.ids), productCards(prisma, newest.ids),
@@ -228,6 +229,7 @@ export function registerCatalog(app, { prisma }) {
       rails: { trending: featured.length ? featured : bestSellers, bestSellers, newArrivals, topRated, deals: dealCards },
       sections: Object.fromEntries(sections.map((s) => [s.id, { heading: s.heading, body: s.body, data: s.data }])),
       sellers: stores.map(publicStore),
+      homeDeal,
     });
   });
 }

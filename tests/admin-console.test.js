@@ -296,3 +296,19 @@ describe('Deals page banner', () => {
     expect((await shopper.agent.put('/api/admin/deals-hero').send({ title: 'Nope' })).status).toBe(403);
   });
 });
+
+describe('Homepage deal block', () => {
+  it('admin picks the featured deal and look; unknown deals are refused; /api/home serves it', async () => {
+    const promo = await ctx.prisma.promotion.create({ data: { name: 'Home block test deal', description: 'For the homepage block test', discountBps: 1500, startsAt: new Date(Date.now() - 60_000), endsAt: new Date(Date.now() + 86_400_000) } });
+    expect((await admin.agent.put('/api/admin/home-deal').send({ promotionId: '00000000-0000-4000-8000-000000000000' })).status).toBe(404);
+    expect((await admin.agent.put('/api/admin/home-deal').send({ bgVia: 'blue' })).status).toBe(400);
+    const res = await admin.agent.put('/api/admin/home-deal').send({ promotionId: promo.id, label: 'Weekend special', bgFrom: '#0b1a33', showTimer: false });
+    expect(res.status).toBe(200);
+    const home = (await ctx.agent().get('/api/home')).body;
+    expect(home.homeDeal).toMatchObject({ promotionId: promo.id, label: 'Weekend special', bgFrom: '#0b1a33', showTimer: false, ctaLabel: 'All deals', enabled: true });
+    const cms = (await admin.agent.get('/api/admin/cms')).body;
+    expect(cms.promotions.some((p) => p.id === promo.id)).toBe(true);
+    const shopper = await ctx.register();
+    expect((await shopper.agent.put('/api/admin/home-deal').send({ enabled: false })).status).toBe(403);
+  });
+});
