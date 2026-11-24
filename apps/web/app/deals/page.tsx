@@ -43,7 +43,10 @@ export default async function DealsPage() {
   const dealProducts = live.flatMap((d) => d.products).sort((a, b) => off(b) - off(a));
   const pool = hero.fillWithDiscounted ? [...dealProducts, ...[...(discounted?.products ?? [])].sort((a, b) => off(b) - off(a))] : dealProducts;
   const collage = hero.showProducts ? pool.filter((p, i, a) => a.findIndex((x) => x.catalogProductId === p.catalogProductId) === i).slice(0, 3) : [];
-  const best = Math.max(0, ...all.map(pct), ...collage.map(off), ...(discounted?.products ?? []).map(off));
+  // Two different numbers exist: a deal's own discount (e.g. 20% extra off the seller's price) and the total saving
+  // against MRP (e.g. 55%). While a deal is live the banner speaks about the deal; otherwise about savings vs MRP.
+  const dealMode = live.length > 0;
+  const best = dealMode ? Math.max(...live.map(pct)) : Math.max(0, ...(discounted?.products ?? []).map(off));
   const ctaLabel = hero.ctaLabel || (featured ? `Shop ${featured.name}` : 'Shop discounts');
   const ctaHref = featured ? (featured.live ? '#live' : '#upcoming') : '#everyday';
   const tabs = [
@@ -67,8 +70,8 @@ export default async function DealsPage() {
               <h1 className="mt-4 font-display text-[44px] leading-[1.02] md:text-[72px] bg-gradient-to-b from-white to-[#ffd98a] bg-clip-text text-transparent">{hero.title}</h1>
             ) : (
               <h1 className="mt-4 text-white leading-[0.95]">
-                <span className="block text-[22px] md:text-[28px] font-sans font-semibold text-white/85">Up to</span>
-                <span className="block font-display text-[76px] md:text-[120px] bg-gradient-to-b from-white to-[#ffd98a] bg-clip-text text-transparent">{best || 20}% OFF</span>
+                <span className="block text-[22px] md:text-[28px] font-sans font-semibold text-white/85">{dealMode ? 'Up to' : 'Save up to'}</span>
+                <span className="block font-display text-[76px] md:text-[120px] bg-gradient-to-b from-white to-[#ffd98a] bg-clip-text text-transparent">{best}% OFF</span>{!dealMode && <span className="block text-[15px] md:text-[17px] font-sans font-semibold text-white/80 mt-2">compared with MRP</span>}
               </h1>
             )}
             {hero.subtitle && <p className="text-white/80 mt-3 max-w-lg text-[15px] md:text-[17px]">{hero.subtitle}</p>}
@@ -87,14 +90,18 @@ export default async function DealsPage() {
                     i === 2 && 'right-0 top-[30%] w-[34%] aspect-square z-10 rotate-[8deg]')}>
                   <span className={cn('absolute inset-0', TILE_BG[i % TILE_BG.length])} />
                   <Image src={p.image} alt="" fill sizes="240px" className="object-contain p-6" unoptimized={p.image.startsWith('/api/')} />
-                  {off(p) > 0 && <span className="absolute top-3 left-3 rounded-full bg-danger text-white text-[11px] font-bold px-2 py-0.5">{off(p)}% OFF</span>}
+                  {p.promotion
+                    ? <span className="absolute top-3 left-3 rounded-full bg-danger text-white text-[11px] font-bold px-2 py-0.5">DEAL · {Math.round(p.promotion.discountBps / 100)}% OFF</span>
+                    : off(p) > 0 && <span className="absolute top-3 left-3 rounded-full bg-ink text-white text-[11px] font-bold px-2 py-0.5">{off(p)}% off MRP</span>}
                   <span className="absolute bottom-0 inset-x-0 bg-white/95 px-3 py-2 text-[12px] font-bold text-ink truncate">{formatMoney(p.pricePaise)} <span className="text-muted font-normal line-through">{formatMoney(p.mrpPaise)}</span></span>
                 </Link>
               ))}
-              {/* Deal discount on top of the seller's price ("extra"), or the best saving when no deal is live. */}
-              <span className="absolute right-[6%] top-0 z-30 size-24 md:size-28 rounded-full bg-[#ffd98a] text-[#7a1a10] grid place-items-center text-center font-display leading-none rotate-12 shadow-lift">
-                <span><span className="block text-[12px] font-sans font-bold tracking-wider">{live[0] ? 'EXTRA' : 'UP TO'}</span><span className="text-[34px] md:text-[40px]">{live[0] ? pct(live[0]) : best}%</span><span className="block text-[12px] font-sans font-bold">OFF</span></span>
-              </span>
+              {/* With a custom headline the discount isn't in the headline, so the badge carries it. */}
+              {hero.title && best > 0 && (
+                <span className="absolute right-[6%] top-0 z-30 size-24 md:size-28 rounded-full bg-[#ffd98a] text-[#7a1a10] grid place-items-center text-center font-display leading-none rotate-12 shadow-lift">
+                  <span><span className="block text-[12px] font-sans font-bold tracking-wider">{dealMode ? 'DEALS' : 'SAVE'}</span><span className="text-[34px] md:text-[40px]">{best}%</span><span className="block text-[12px] font-sans font-bold">{dealMode ? 'OFF' : 'VS MRP'}</span></span>
+                </span>
+              )}
             </div>
           )}
         </div>
