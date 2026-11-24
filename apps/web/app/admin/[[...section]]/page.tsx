@@ -7,7 +7,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   LayoutDashboard, Users, Shield, Building2, Store, ClipboardCheck, FolderTree, Tag, Package, Boxes, ShoppingCart, FileText, CreditCard, RotateCcw,
   Wallet, Truck, Undo2, Zap, Ticket, LayoutTemplate, Image as ImageIcon, Bell, LifeBuoy, BarChart3, ScrollText, Settings, LogOut, LineChart, Star,
-  PanelLeftClose, PanelLeftOpen, ExternalLink, ChevronDown, ChevronRight, X, CheckCircle2,
+  PanelLeftClose, PanelLeftOpen, ExternalLink, ChevronDown, ChevronRight, X, CheckCircle2, Mail,
 } from 'lucide-react';
 import { api, post } from '@/lib/api';
 import { cn } from '@/lib/format';
@@ -48,6 +48,7 @@ const ITEMS: Item[] = [
   { id: 'cms', label: 'Homepage & content', icon: LayoutTemplate, cap: 'cms.manage', group: 'Platform' },
   { id: 'media', label: 'Media library', icon: ImageIcon, cap: 'media.manage', group: 'Platform' },
   { id: 'notifications', label: 'Notifications', icon: Bell, cap: 'notifications.send', group: 'Platform' },
+  { id: 'emails', label: 'Customer emails', icon: Mail, cap: 'notifications.send', group: 'Platform' },
   { id: 'support', label: 'Support', icon: LifeBuoy, cap: 'support.manage', group: 'Platform' },
   { id: 'reports', label: 'Reports', icon: BarChart3, cap: 'reports.view', group: 'Reports' },
   { id: 'audit', label: 'Audit log', icon: ScrollText, cap: 'audit.view', group: 'Reports' },
@@ -172,7 +173,7 @@ export default function AdminPage({ params }: { params: Promise<{ section?: stri
     moderation: <K.Moderation />, products: <K.Products can={can} />, categories: <K.Categories can={can} />, brands: <K.Brands />, inventory: <K.Inventory />, reviews: <K.Reviews />,
     orders: <C.Orders can={can} />, b2b: <C.B2B />, shipping: <C.Shipping can={can} />, returns: <C.Returns />, promotions: <C.Promotions />, coupons: <C.Coupons />,
     payments: <C.Payments />, refunds: <C.Refunds can={can} />, finance: <C.Finance can={can} />,
-    cms: <X2.Cms />, media: <X2.Media />, notifications: <X2.Broadcast />, support: <X2.SupportQueue />, reports: <X2.Reports caps={caps} />, audit: <X2.Audit />, settings: <X2.SettingsPanel canFinance={can('finance.manage')} />,
+    cms: <X2.Cms />, media: <X2.Media />, notifications: <X2.Broadcast />, emails: <X2.Emails />, support: <X2.SupportQueue />, reports: <X2.Reports caps={caps} />, audit: <X2.Audit />, settings: <X2.SettingsPanel canFinance={can('finance.manage')} />,
   };
   // On phones the sidebar is a drawer and always shows labels.
   const narrow = collapsed && !mobileOpen;

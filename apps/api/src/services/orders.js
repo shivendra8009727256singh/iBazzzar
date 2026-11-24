@@ -5,7 +5,8 @@ import {
   DomainError, assertTransition, sellerOrderFlow, orderStatusFrom, commissionPaise, money, stateCode,
 } from '../../../../packages/shared/src/index.js';
 import { toPaise } from '../lib/db.js';
-import { audit, notify, notifyStoreOwners } from '../lib/audit.js';
+import { audit, notifyStoreOwners } from '../lib/audit.js';
+import { notifyCustomer } from '../lib/email.js';
 import { nextNumber, nextInvoiceNumber } from '../lib/sequence.js';
 import { shortRef } from '../lib/http.js';
 import * as inventory from './inventory.js';
@@ -105,7 +106,12 @@ export async function createOrder(tx, { user, organizationId = null, purchaseOrd
 }
 
 async function announceConfirmed(tx, order) {
-  await notify(tx, order.userId, { title: 'Order confirmed', body: `Order ${order.number} is confirmed and with the seller.`, link: `/account/orders/${order.id}` });
+  const items = await tx.orderItem.findMany({ where: { orderId: order.id }, select: { name: true, variantLabel: true, quantity: true, totalPaise: true } });
+  await notifyCustomer(tx, order.userId, {
+    kind: 'order.confirmed', title: 'Order confirmed', subject: `Order ${order.number} confirmed`, link: `/account/orders/${order.id}`,
+    body: `Thank you! Order ${order.number} is confirmed and with the seller. Total ${money(toPaise(order.totalPaise))}${order.paymentMethod === 'COD' ? ', to pay on delivery' : ''}.`,
+    lines: items.map((i) => `${i.quantity} × ${i.name}${i.variantLabel && i.variantLabel !== 'Standard' ? ` (${i.variantLabel})` : ''} — ${money(toPaise(i.totalPaise))}`),
+  });
   const sellerOrders = await tx.sellerOrder.findMany({ where: { orderId: order.id }, select: { storeId: true } });
   for (const so of sellerOrders) {
     await notifyStoreOwners(tx, so.storeId, { title: 'New order to fulfil', body: `Order ${order.number} is ready for packing.`, link: '/seller/orders' });
@@ -192,7 +198,7 @@ export async function expireUnpaid(prisma, at = new Date()) {
       const order = await lockOrder(tx, id);
       if (order?.status !== 'AWAITING_PAYMENT' || order.paymentDueAt > at) return;
       await cancelWhole(tx, order, { actorId: null, note: order.paymentMethod === 'BANK_TRANSFER' ? 'Bank transfer not received in time' : 'Payment window expired' });
-      await notify(tx, order.userId, { title: 'Order expired', body: `Payment for ${order.number} wasn’t received in time, so the reserved stock was released.`, link: `/account/orders/${order.id}` });
+      await notifyCustomer(tx, order.userId, { kind: 'order.expired', title: 'Order expired', body: `Payment for ${order.number} wasn’t received in time, so the reserved stock was released.`, link: `/account/orders/${order.id}` });
       expired++;
     });
   }
@@ -251,7 +257,7 @@ export async function ship(tx, sellerOrderId, { storeId, actorId, booking }) {
   await tx.sellerOrder.update({ where: { id: so.id }, data: { status: 'SHIPPED' } });
   await history(tx, so.orderId, 'SHIPPED', { sellerOrderId: so.id, note: `${booking.carrier} · ${booking.trackingRef}`, actorId });
   await syncOrderStatus(tx, so.orderId, actorId);
-  await notify(tx, so.order.userId, { title: 'Your parcel is on its way', body: `Part of order ${so.order.number} shipped with ${booking.carrier} (tracking ${booking.trackingRef}).`, link: `/account/orders/${so.orderId}` });
+  await notifyCustomer(tx, so.order.userId, { kind: 'parcel.shipped', title: 'Your parcel is on its way', body: `Part of order ${so.order.number} shipped with ${booking.carrier} (tracking ${booking.trackingRef}).`, link: `/account/orders/${so.orderId}` });
   await audit(tx, { actorId, action: 'fulfilment.shipped', entityType: 'seller_order', entityId: so.id, metadata: { carrier: booking.carrier, trackingRef: booking.trackingRef } });
   return shipment;
 }
@@ -276,7 +282,7 @@ async function markDelivered(tx, sellerOrderId, { actorId }) {
   await history(tx, so.orderId, 'DELIVERED', { sellerOrderId: so.id, actorId });
   await syncOrderStatus(tx, so.orderId, actorId);
   await recordEarnings(tx, so);
-  await notify(tx, so.order.userId, { title: 'Delivered', body: `A parcel from order ${so.order.number} was delivered. We hope you love it.`, link: `/account/orders/${so.orderId}` });
+  await notifyCustomer(tx, so.order.userId, { kind: 'parcel.delivered', title: 'Delivered', body: `A parcel from order ${so.order.number} was delivered. We hope you love it.`, link: `/account/orders/${so.orderId}` });
 }
 
 /**
@@ -311,8 +317,38 @@ export async function sellerCancel(tx, sellerOrderId, { storeId, actorId, reason
   if (isPaidOnline(order)) {
     await createRefund(tx, { order, sellerOrder: so, amountPaise: toPaise(so.totalPaise), reason: `Seller cancelled: ${reason}`, returnId: null });
   }
-  await notify(tx, order.userId, { title: 'Part of your order was cancelled', body: `The seller couldn’t fulfil part of order ${order.number}: ${reason}.${isPaidOnline(order) ? ' A refund has been initiated.' : ''}`, link: `/account/orders/${order.id}` });
+  await notifyCustomer(tx, order.userId, { kind: 'parcel.cancelled', title: 'Part of your order was cancelled', body: `The seller couldn’t fulfil part of order ${order.number}: ${reason}.${isPaidOnline(order) ? ' A refund has been initiated.' : ''}`, link: `/account/orders/${order.id}` });
   await audit(tx, { actorId, action: 'fulfilment.cancelled', entityType: 'seller_order', entityId: so.id, metadata: { reason } });
+}
+
+/**
+ * The customer cancels an order before any parcel has shipped. Stock goes back; money already received online is
+ * refunded per parcel. Unpaid orders use cancelUnpaid instead.
+ */
+export async function customerCancel(tx, orderId, { ownerId, reason }) {
+  const order = await lockOrder(tx, orderId);
+  if (!order || order.userId !== ownerId) throw new DomainError('Order not found', 404);
+  if (order.status === 'CANCELLED') return order;
+  if (order.status === 'AWAITING_PAYMENT') return cancelUnpaid(tx, orderId, { actorId: ownerId, ownerId, note: 'Cancelled by customer' });
+  const live = order.sellerOrders.filter((so) => so.status !== 'CANCELLED');
+  if (live.some((so) => !['PENDING', 'PACKED'].includes(so.status))) throw new DomainError('Part of this order has already shipped. You can return it once it’s delivered.', 409);
+  const why = reason ? `Cancelled by customer: ${reason}` : 'Cancelled by customer';
+  for (const so of live) {
+    await restockSellerOrder(tx, order, so.id, 'Customer cancelled');
+    await tx.sellerOrder.update({ where: { id: so.id }, data: { status: 'CANCELLED' } });
+    await history(tx, orderId, 'CANCELLED', { sellerOrderId: so.id, note: why, actorId: ownerId });
+    if (isPaidOnline(order)) await createRefund(tx, { order, sellerOrder: so, amountPaise: toPaise(so.totalPaise), reason: why, returnId: null });
+    await notifyStoreOwners(tx, so.storeId, { title: 'Order cancelled by the customer', body: `Order ${order.number} was cancelled before dispatch. Don’t ship it.`, link: '/seller/orders' });
+  }
+  await syncOrderStatus(tx, orderId, ownerId);
+  const redemption = await tx.couponRedemption.findUnique({ where: { orderId } });
+  if (redemption) await tx.coupon.update({ where: { id: redemption.couponId }, data: { used: { decrement: 1 } } });
+  await notifyCustomer(tx, order.userId, {
+    kind: 'order.cancelled', title: 'Order cancelled', link: `/account/orders/${orderId}`,
+    body: `Order ${order.number} has been cancelled.${isPaidOnline(order) ? ' Your refund has been initiated; banks usually take 5–7 working days to show it.' : ''}`,
+  });
+  await audit(tx, { actorId: ownerId, action: 'order.cancelled.customer', entityType: 'order', entityId: orderId, metadata: { reason: reason ?? null, refunded: isPaidOnline(order) } });
+  return tx.order.findUnique({ where: { id: orderId } });
 }
 
 // ───────────── Refunds ─────────────
@@ -337,7 +373,7 @@ async function createRefund(tx, { order, sellerOrder, amountPaise, reason, retur
   if (order.paymentStatus !== 'DEMO_SIMULATED' && isPaidOnline(order)) {
     await tx.order.update({ where: { id: order.id }, data: { paymentStatus: total >= toPaise(order.totalPaise) ? 'REFUNDED' : 'PARTIALLY_REFUNDED' } });
   }
-  await notify(tx, order.userId, { title: 'Refund initiated', body: `A refund of ${money(amountPaise)} for order ${order.number} has been initiated.`, link: `/account/orders/${order.id}` });
+  await notifyCustomer(tx, order.userId, { kind: 'refund.created', title: 'Refund initiated', body: `A refund of ${money(amountPaise)} for order ${order.number} has been initiated.`, link: `/account/orders/${order.id}` });
   return refund;
 }
 
@@ -369,7 +405,7 @@ export async function recordTermsPayment(tx, orderId, { reference, actorId }) {
   const updated = await tx.order.update({ where: { id: orderId }, data: { paymentStatus: 'PAID', paymentRef: reference, paymentDueAt: null } });
   await history(tx, orderId, 'TERMS_PAID', { note: `Payment received (${reference})`, actorId });
   await audit(tx, { actorId, action: 'payment.terms-received', entityType: 'order', entityId: orderId, metadata: { reference } });
-  await notify(tx, order.userId, { title: 'Payment received', body: `We’ve recorded payment for ${order.number}. Thank you.`, link: `/account/orders/${orderId}` });
+  await notifyCustomer(tx, order.userId, { kind: 'payment.received', title: 'Payment received', body: `We’ve recorded payment for ${order.number}. Thank you.`, link: `/account/orders/${orderId}` });
   return updated;
 }
 
@@ -431,9 +467,9 @@ export async function decideReturn(tx, returnId, { storeId, actorId, decision, n
   const r = await lockReturn(tx, returnId, storeId);
   if (r.status !== 'REQUESTED') throw new DomainError('This return has already been decided', 409);
   await tx.returnRequest.update({ where: { id: r.id }, data: { status: decision, decidedBy: actorId, note: note ?? null } });
-  await notify(tx, r.userId, decision === 'APPROVED'
-    ? { title: 'Return approved', body: 'Please pack the items. The seller will arrange collection, and your refund starts once they receive them.', link: `/account/orders/${r.orderId}` }
-    : { title: 'Return declined', body: note || 'Your return request was declined. Contact support if you need help.', link: `/account/orders/${r.orderId}` });
+  await notifyCustomer(tx, r.userId, decision === 'APPROVED'
+    ? { kind: 'return.approved', title: 'Return approved', body: 'Please pack the items. The seller will arrange collection, and your refund starts once they receive them.', link: `/account/orders/${r.orderId}` }
+    : { kind: 'return.declined', title: 'Return declined', body: note || 'Your return request was declined. Contact support if you need help.', link: `/account/orders/${r.orderId}` });
   await audit(tx, { actorId, action: `return.${decision.toLowerCase()}`, entityType: 'return', entityId: r.id, metadata: { note } });
 }
 

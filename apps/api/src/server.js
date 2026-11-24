@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import pino from 'pino';
 import { loadConfig } from './config.js';
 import { createApp } from './app.js';
+import { dispatchEmails } from './lib/email.js';
 import { createPrisma } from './lib/db.js';
 import { createMailer } from './integrations/mailer.js';
 import { createStorage } from './integrations/storage.js';
@@ -47,9 +48,10 @@ if (config.redisUrl) {
   }
 }
 
+const mailer = await createMailer(config.mail, logger);
 const app = createApp({
   prisma, config, logger, redis,
-  mailer: await createMailer(config.mail, logger),
+  mailer,
   storage: await createStorage(config.storage),
   payments: createPayments(config.payments),
   shipping: createShipping(),
@@ -59,6 +61,10 @@ const server = app.listen(config.port, config.host, () => {
   logger.info({ port: config.port, host: config.host, env: config.env, payments: config.payments.keyId ? 'razorpay-test' : config.demoPayments ? 'demo' : 'off' }, 'IBazzzar API ready');
 });
 server.keepAliveTimeout = 65_000;
+
+// Customer emails are written to an outbox inside each transaction and sent from here, with retries.
+const emailTimer = setInterval(() => { dispatchEmails(prisma, mailer, { logger }).catch((error) => logger.warn(`Email dispatch failed: ${error.message}`)); }, 10_000);
+emailTimer.unref();
 
 async function shutdown(signal) {
   logger.info({ signal }, 'Shutting down');

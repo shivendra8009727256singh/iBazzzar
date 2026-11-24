@@ -1,5 +1,19 @@
 # IBazzzar progress
 
+## 2026-11-25 — Step B: B2C customer data
+
+| Part | What was added |
+| --- | --- |
+| Customer emails | Transactional outbox (`email_outbox`): emails are written in the same database transaction as the change (order confirmed with items and total, parcel shipped, delivered, cancelled, order expired, refund initiated/processed, return approved/declined, credit payment received) and sent by the API every 10 seconds with retries (1 min, 5 min, 30 min, 2 h, then failed). Safe with several API instances (`FOR UPDATE SKIP LOCKED`). The development console mailer is recorded as "logged only", never as delivered. Admin → Platform → Customer emails: status counts, filters, preview, send again. |
+| Cancel paid orders | Customers can cancel any order until a parcel ships: stock is restored, each seller is told not to ship, money paid online is refunded per parcel, the coupon use is released. |
+| Privacy (DPDP Act 2023) | Download my data (JSON). Delete my account with password and "DELETE": blocked with clear reasons while orders, returns or refunds are open, or for sellers, business members and staff. Name, email, phone, addresses, wishlist, cart, notifications and sessions are removed; orders and invoices stay without the person's identity (GST record-keeping); reviews show "Former customer"; the email can be registered again. |
+| Buy again | On every order: puts the items back in the cart, skipping anything no longer sold. |
+| My reviews | Delivered products waiting for a review with a star picker, and the reviews already written (hidden ones say why). |
+
+Migration `202611250001_b2c_customer` (additive): `email_outbox`, `users.deletedAt`, `UserStatus.DELETED`. Applied to the configured
+database (Aiven); local databases get it from `npm run dev`. Verified: 125/125 API tests (10 new in `tests/customer.test.js`),
+lint, typecheck, e2e 13/13, every admin section loads with no failed API calls or console errors.
+
 ## 2026-11-23 (night) — realistic sample data for local development
 
 `npm run db:seed:sample` fills a **local** database with a running-shop dataset: 10 GST-registered sellers across 10 states, 49 products (76 offers, variants, specs, wholesale tiers), 90 customers, 4 business buyers (two on credit terms) and ~300 orders over the last 90 days, all placed through the real order services so GST, invoices, shipments, the seller ledger, refunds, returns, reviews and payouts are consistent. Nothing is labelled "demo", so dashboards and analytics count it. `-- --reset` also removes the old demo catalogue; `-- --remove` takes the sample data out again (every record is listed in the `sampleData` setting). It refuses to run unless `DATABASE_URL` points at this machine. All e-mail addresses are `@example.com` (never delivered) and accounts share the local password `Local-Sample-2026`. Product images are still the illustrative SVGs in `apps/web/public/products`.

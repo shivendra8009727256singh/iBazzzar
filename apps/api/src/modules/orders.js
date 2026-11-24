@@ -147,11 +147,13 @@ export function registerOrders(app, { prisma, config, payments, limits, logger }
 
   app.post('/api/orders/:id/cancel', requireAuth, async (req, res) => {
     const id = uuid.parse(req.params.id);
+    const { reason } = z.object({ reason: z.string().trim().max(200).optional() }).parse(req.body ?? {});
     await transaction(prisma, async (tx) => {
-      const o = await tx.order.findUnique({ where: { id }, select: { userId: true, paymentMethod: true, status: true } });
+      const o = await tx.order.findUnique({ where: { id }, select: { userId: true, status: true } });
       if (!o || o.userId !== req.user.id) throw new DomainError('Order not found', 404);
-      if (o.paymentMethod === 'COD' && o.status !== 'AWAITING_PAYMENT') return orders.cancelCodBeforeShipping(tx, id, { ownerId: req.user.id });
-      return orders.cancelUnpaid(tx, id, { actorId: req.user.id, ownerId: req.user.id, note: 'Cancelled by customer' });
+      if (o.status === 'AWAITING_PAYMENT') return orders.cancelUnpaid(tx, id, { actorId: req.user.id, ownerId: req.user.id, note: 'Cancelled by customer' });
+      // Paid online, cash on delivery or bank transfer: allowed until a parcel ships; online payments are refunded.
+      return orders.customerCancel(tx, id, { ownerId: req.user.id, reason });
     });
     res.json({ order: customerOrder(await prisma.order.findUnique({ where: { id }, include: orderDetailInclude })) });
   });

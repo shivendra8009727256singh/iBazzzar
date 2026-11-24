@@ -19,6 +19,7 @@ datasource db {
 enum UserStatus {
   ACTIVE
   SUSPENDED
+  DELETED
 }
 
 enum StaffRole {
@@ -253,6 +254,8 @@ model User {
   emailVerifiedAt  DateTime?  @db.Timestamptz(3)
   termsAcceptedAt  DateTime?  @db.Timestamptz(3)
   marketingOptIn   Boolean    @default(false)
+  /// Set when the customer deleted their account; personal details are removed, order records are kept.
+  deletedAt        DateTime?  @db.Timestamptz(3)
   failedLogins     Int        @default(0)
   lockedUntil      DateTime?  @db.Timestamptz(3)
   demo             Boolean    @default(false)
@@ -1584,4 +1587,26 @@ model DocumentSequence {
   value Int    @default(0)
 
   @@map("document_sequences")
+}
+
+/// Transactional outbox for customer emails: rows are written in the same transaction as the change they describe
+/// and sent by a dispatcher afterwards, so an email is never sent for a change that rolled back.
+model EmailOutbox {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String?   @db.Uuid
+  to        String
+  kind      String
+  subject   String
+  text      String
+  html      String?
+  status    String    @default("PENDING") // PENDING | SENDING | SENT | FAILED | SKIPPED
+  attempts  Int       @default(0)
+  lastError String?
+  sendAfter DateTime  @default(now()) @db.Timestamptz(3)
+  sentAt    DateTime? @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+
+  @@index([status, sendAfter])
+  @@index([userId, createdAt])
+  @@map("email_outbox")
 }

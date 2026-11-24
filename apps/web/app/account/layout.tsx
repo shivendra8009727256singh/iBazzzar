@@ -1,11 +1,12 @@
 'use client';
-import { LayoutDashboard, Package, MapPin, RotateCcw, Heart, Bell, LifeBuoy, UserCog } from 'lucide-react';
+import { LayoutDashboard, Package, MapPin, RotateCcw, Heart, Bell, LifeBuoy, UserCog, Star } from 'lucide-react';
 import { WorkspaceShell } from '@/components/workspace';
 
 const NAV = [
   { href: '/account', label: 'Overview', icon: LayoutDashboard, exact: true },
   { href: '/account/orders', label: 'Orders', icon: Package },
   { href: '/account/returns', label: 'Returns & refunds', icon: RotateCcw },
+  { href: '/account/reviews', label: 'My reviews', icon: Star },
   { href: '/wishlist', label: 'Wishlist', icon: Heart },
   { href: '/account/addresses', label: 'Addresses', icon: MapPin },
   { href: '/account/notifications', label: 'Notifications', icon: Bell },

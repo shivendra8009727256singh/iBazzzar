@@ -5,6 +5,7 @@ import { uuid, couponSchema, promotionSchema, decisionSchema, trackingUpdateSche
 import { requireStaff } from '../../http/middleware.js';
 import { transaction, toPaise } from '../../lib/db.js';
 import { audit, notify, notifyStoreOwners } from '../../lib/audit.js';
+import { notifyCustomer } from '../../lib/email.js';
 import { ilike } from '../../lib/http.js';
 import { listParams, sendList, bulkInput } from '../../lib/admin-list.js';
 import * as orders from '../../services/orders.js';
@@ -284,7 +285,7 @@ export function registerAdminCommerce(app, { prisma, payments, shipping, mailer,
       const updated = await tx.refund.updateMany({ where: { id, status: 'PENDING_PROVIDER' }, data: { status: 'PROCESSED', providerRef: reference, processedAt: new Date() } });
       if (!updated.count) throw new DomainError('This refund was already processed', 409);
       if (refund.returnId) await tx.returnRequest.updateMany({ where: { id: refund.returnId, status: 'RECEIVED' }, data: { status: 'REFUNDED' } });
-      await notify(tx, refund.order.userId, { title: 'Refund processed', body: `${money(m(refund.amountPaise))} for order ${refund.order.number} has been refunded. Banks usually take 5–7 working days to show it.`, link: `/account/orders/${refund.orderId}` });
+      await notifyCustomer(tx, refund.order.userId, { kind: 'refund.processed', title: 'Refund processed', body: `${money(m(refund.amountPaise))} for order ${refund.order.number} has been refunded. Banks usually take 5–7 working days to show it.`, link: `/account/orders/${refund.orderId}` });
       await audit(tx, { actorId: req.user.id, action: `refund.processed.${input.mode.toLowerCase()}`, entityType: 'refund', entityId: id, metadata: { reference } });
     });
     res.json({ ok: true, reference });

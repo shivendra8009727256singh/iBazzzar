@@ -10,6 +10,7 @@ import { api, post } from '@/lib/api';
 import type { Order, Parcel, PaymentInfo } from '@/lib/types';
 import { formatDate, formatDateTime, formatMoney, label, ORDER_STATUS_TEXT, PAYMENT_TEXT } from '@/lib/format';
 import { ParcelProgress } from '@/components/order-bits';
+import { BuyAgainButton } from '@/components/buy-again';
 import { payDemo, payOnline } from '@/components/pay';
 import { Alert, Badge, Button, ConfirmButton, Field, Modal, Spinner, StatusBadge, Textarea, useFormErrors } from '@/components/ui';
 
@@ -97,7 +98,9 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
     try { if (payment.provider === 'razorpay') await payOnline(o.id); else await payDemo(o.id); toast.success('Payment received'); reload(); }
     catch (e) { toast.error(e instanceof Error ? e.message : 'Payment failed'); } finally { setPaying(false); }
   };
-  const cancellable = o.status === 'AWAITING_PAYMENT' || (o.paymentMethod === 'COD' && o.parcels.every((p) => ['PENDING', 'PACKED', 'CANCELLED'].includes(p.status)) && o.status !== 'CANCELLED');
+  // Any order can be cancelled until a parcel ships; money paid online is refunded automatically.
+  const cancellable = o.status !== 'CANCELLED' && o.parcels.every((p) => ['PENDING', 'PACKED', 'CANCELLED'].includes(p.status));
+  const paidOnline = ['PAID', 'DEMO_SIMULATED', 'PARTIALLY_REFUNDED'].includes(o.paymentStatus);
 
   return (
     <div className="grid gap-5">
@@ -205,7 +208,8 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
           {o.billingGstin && <p className="text-sm text-muted mt-2">GSTIN on invoice: {o.billingGstin}</p>}
           <div className="flex flex-wrap gap-2 mt-4">
             <Link href={`/account/support?order=${o.id}`} className="btn btn-outline btn-sm">Get help with this order</Link>
-            {cancellable && <ConfirmButton danger title="Cancel this order?" body="Reserved items go back on sale. This can’t be undone." confirmLabel="Cancel order" onConfirm={async () => { await post(`/orders/${o.id}/cancel`); toast.success('Order cancelled'); reload(); }}>Cancel order</ConfirmButton>}
+            {cancellable && <ConfirmButton danger title="Cancel this order?" body={paidOnline ? `The full amount you paid (${formatMoney(o.totalPaise)}) is refunded to your original payment method. Banks usually take 5–7 working days.` : 'The items go back on sale. This can’t be undone.'} reason={{ label: 'Why are you cancelling? (optional)', min: 0 }} confirmLabel="Cancel order" onConfirm={async (reason) => { await post(`/orders/${o.id}/cancel`, reason ? { reason } : {}); toast.success(paidOnline ? 'Order cancelled. Your refund has started.' : 'Order cancelled'); reload(); }}>Cancel order</ConfirmButton>}
+            <BuyAgainButton order={o} />
           </div>
         </section>
       </div>

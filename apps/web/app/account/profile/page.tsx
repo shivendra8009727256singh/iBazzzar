@@ -7,6 +7,7 @@ import { api, patch, post } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
 import { useSession } from '@/components/providers';
 import { Alert, Badge, Button, Checkbox, Field, Input, PageHeader, Spinner, useFormErrors } from '@/components/ui';
+import { PrivacySection } from '@/components/privacy-section';
 
 export default function ProfilePage() {
   const { user } = useSession();
@@ -50,10 +51,11 @@ export default function ProfilePage() {
         <section className="card card-pad max-w-2xl">
           <h2 className="text-lg mb-3">Signed-in devices</h2>
           <ul className="grid gap-2">
-            {sessions?.sessions.map((s) => <li key={s.id} className="flex items-center gap-3 text-sm"><Monitor size={17} className="text-forest" /><span className="flex-1 truncate">{s.userAgent ?? 'Unknown device'}<span className="block text-xs text-muted">Signed in {formatDateTime(s.createdAt)}</span></span>{s.current && <Badge tone="success">This device</Badge>}</li>)}
+            {sessions?.sessions.map((s) => <li key={s.id} className="flex items-center gap-3 text-sm"><Monitor size={17} className="text-forest" /><span className="flex-1 min-w-0 truncate" title={s.userAgent ?? undefined}>{s.userAgent ?? 'Unknown device'}<span className="block text-xs text-muted">Signed in {formatDateTime(s.createdAt)}</span></span>{s.current && <Badge tone="success">This device</Badge>}</li>)}
           </ul>
           <p className="text-xs text-muted mt-3">Changing your password signs out every other device.</p>
         </section>
+        <PrivacySection />
       </div>
     </>
   );

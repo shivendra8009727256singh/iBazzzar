@@ -10,7 +10,7 @@ import type { Ticket } from '@/lib/types';
 import { cn, formatDate, formatDateTime, formatMoney, rupeesToPaise } from '@/lib/format';
 import { SupportThread } from '../support-thread';
 import { Alert, Badge, Button, ConfirmButton, Field, Input, Select, StatusBadge, Textarea, Checkbox } from '../ui';
-import { DataTable, Loadable, Pager, Section, Table, useAdminList, useAdminTable, type Column, type ListResponse } from './kit';
+import { DataTable, Drawer, KV, Loadable, Pager, Section, Table, attempt, useAdminList, useAdminTable, useOpenParam, type Column, type ListResponse } from './kit';
 
 // ───────────── Homepage CMS ─────────────
 type CmsData = {
@@ -265,5 +265,45 @@ function SettingsForms({ d, save, canFinance }: { d: Settings; save: (k: string,
         </>
       ) : <Alert tone="info">Commission and bank details are managed by finance.</Alert>}
     </div>
+  );
+}
+
+// ───────────── Customer emails ─────────────
+type EmailRow = { id: string; userId: string | null; to: string; kind: string; subject: string; status: string; attempts: number; lastError: string | null; createdAt: string; sentAt: string | null; sendAfter: string };
+const EMAIL_TONE: Record<string, string> = { SENT: 'SENT', PENDING: 'PENDING', SENDING: 'PENDING', FAILED: 'FAILED', SKIPPED: 'PAUSED' };
+export function Emails() {
+  const list = useAdminTable<ListResponse & { emails: EmailRow[]; counts: Record<string, number>; kinds: string[]; provider: string }>('/admin/emails', ['status', 'kind', 'user']);
+  const [open, setOpen] = useOpenParam();
+  const preview = useQuery({ queryKey: ['admin', 'email', open], queryFn: () => api<{ email: EmailRow & { text: string; html: string | null } }>(`/admin/emails/${open}`), enabled: !!open });
+  const retry = async (id: string) => { if (await attempt(() => post(`/admin/emails/${id}/retry`), 'Queued to send again')) { list.refetch(); preview.refetch(); } };
+  const c = list.data?.counts ?? {};
+  const columns: Column<EmailRow>[] = [
+    { key: 'when', label: 'Created', sort: 'newest', render: (e) => <span className="text-sm whitespace-nowrap">{formatDateTime(e.createdAt)}</span> },
+    { key: 'to', label: 'To', always: true, render: (e) => <span className="text-sm">{e.to}</span> },
+    { key: 'subject', label: 'Subject', render: (e) => <span className="text-sm font-medium">{e.subject}<span className="block text-xs text-muted font-mono">{e.kind}</span></span> },
+    { key: 'attempts', label: 'Tries', className: 'text-right', render: (e) => e.attempts },
+    { key: 'status', label: 'Status', render: (e) => <><StatusBadge status={EMAIL_TONE[e.status] ?? e.status} text={e.status === 'SKIPPED' ? 'Logged only' : e.status.charAt(0) + e.status.slice(1).toLowerCase()} />{e.lastError && <span className="block text-xs text-muted max-w-xs truncate" title={e.lastError}>{e.lastError}</span>}</> },
+  ];
+  return (
+    <Section title="Customer emails" description="Order, delivery, refund and return emails sent to customers. They are written with the change they describe and sent within a few seconds, with automatic retries.">
+      {list.data?.provider === 'console' && <div className="mb-4"><Alert tone="warning" title="Emails are only logged">MAIL_PROVIDER is set to console, so emails are written to the API log instead of being delivered. Set MAIL_PROVIDER=smtp and SMTP_URL to send real email.</Alert></div>}
+      <div className="flex flex-wrap gap-2 mb-4">
+        {[['Sent', c.SENT ?? 0, 'success'], ['Waiting', (c.PENDING ?? 0) + (c.SENDING ?? 0), 'info'], ['Failed', c.FAILED ?? 0, 'danger'], ['Logged only', c.SKIPPED ?? 0, 'neutral']].map(([l, n, t]) => <Badge key={l as string} tone={t as 'success'}>{l as string}: {n as number}</Badge>)}
+      </div>
+      <DataTable tableId="emails" query={list} rows={list.data?.emails} columns={columns} onOpen={(e) => setOpen(e.id)} search="Email address or subject"
+        filters={[{ key: 'status', label: 'Status', options: [['SENT', 'Sent'], ['PENDING', 'Waiting'], ['FAILED', 'Failed'], ['SKIPPED', 'Logged only']] }, { key: 'kind', label: 'Type', options: (list.data?.kinds ?? []).map((k) => [k, k]) }]} />
+      {open && (
+        <Drawer open onClose={() => setOpen(null)} title={preview.data?.email.subject ?? 'Loading…'} subtitle={preview.data ? `To ${preview.data.email.to} · ${preview.data.email.kind}` : undefined}
+          badges={preview.data && <StatusBadge status={EMAIL_TONE[preview.data.email.status] ?? preview.data.email.status} text={preview.data.email.status} />}
+          actions={preview.data && ['FAILED', 'SKIPPED'].includes(preview.data.email.status) && <Button size="sm" onClick={() => retry(preview.data!.email.id)}>Send again</Button>}>
+          {preview.data && <>
+            <KV items={[['Created', formatDateTime(preview.data.email.createdAt)], ['Sent', preview.data.email.sentAt ? formatDateTime(preview.data.email.sentAt) : '—'], ['Attempts', preview.data.email.attempts], ['Last error', preview.data.email.lastError]]} />
+            {preview.data.email.html
+              ? <iframe title="Email preview" sandbox="" srcDoc={preview.data.email.html} className="w-full h-[520px] rounded-xl border border-line bg-white" />
+              : <pre className="whitespace-pre-wrap text-sm rounded-xl border border-line bg-white p-4">{preview.data.email.text}</pre>}
+          </>}
+        </Drawer>
+      )}
+    </Section>
   );
 }

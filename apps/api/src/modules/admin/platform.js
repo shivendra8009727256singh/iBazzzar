@@ -22,7 +22,7 @@ export const HOME_SECTIONS = {
   sell: 'Sell on IBazzzar',
 };
 
-export function registerAdminPlatform(app, { prisma, storage }) {
+export function registerAdminPlatform(app, { prisma, storage, mailer }) {
   const cms = requireStaff('cms.manage');
 
   // ───────────── Homepage sections (optimistic versioning prevents two editors overwriting each other) ─────────────
@@ -199,6 +199,42 @@ export function registerAdminPlatform(app, { prisma, storage }) {
     const people = new Map((await prisma.user.findMany({ where: { id: { in: [...new Set(rows.map((r) => r.actorId).filter((x) => /^[0-9a-f-]{36}$/.test(x ?? '')))] } }, select: { id: true, name: true } })).map((u) => [u.id, u.name]));
     const entries = rows.map((r) => ({ ...r, actor: r.actorId ? people.get(r.actorId) ?? r.actorId : 'System' }));
     sendList(res, p, { key: 'entries', rows: entries, total, filename: 'audit-log', toCsvRow: (r) => ({ when: r.createdAt, actor: r.actor, action: r.action, entity: r.entityType, entity_id: r.entityId, ip: r.ip ?? '', details: JSON.stringify(r.metadata ?? {}) }) });
+  });
+
+  // ───────────── Customer emails (outbox) ─────────────
+  const emailSorts = { newest: (d) => ({ createdAt: d }) };
+  app.get('/api/admin/emails', requireStaff('notifications.send'), async (req, res) => {
+    const p = listParams(req.query, emailSorts);
+    const where = {
+      ...(req.query.status ? { status: String(req.query.status) } : {}),
+      ...(req.query.kind ? { kind: String(req.query.kind) } : {}),
+      ...(req.query.user ? { userId: String(req.query.user) } : {}),
+      ...(p.q ? { OR: [{ to: ilike(p.q) }, { subject: ilike(p.q) }] } : {}),
+      ...(p.createdAt ? { createdAt: p.createdAt } : {}),
+    };
+    const [rows, total, counts, kinds] = await Promise.all([
+      prisma.emailOutbox.findMany({ where, orderBy: p.orderBy, skip: p.skip, take: p.take, select: { id: true, userId: true, to: true, kind: true, subject: true, status: true, attempts: true, lastError: true, createdAt: true, sentAt: true, sendAfter: true } }),
+      prisma.emailOutbox.count({ where }),
+      prisma.emailOutbox.groupBy({ by: ['status'], _count: { _all: true } }),
+      prisma.emailOutbox.findMany({ distinct: ['kind'], select: { kind: true }, orderBy: { kind: 'asc' } }),
+    ]);
+    sendList(res, p, {
+      key: 'emails', rows, total, filename: 'emails',
+      extra: { counts: Object.fromEntries(counts.map((c) => [c.status, c._count._all])), kinds: kinds.map((k) => k.kind), provider: mailer.provider },
+      toCsvRow: (e) => ({ to: e.to, kind: e.kind, subject: e.subject, status: e.status, attempts: e.attempts, error: e.lastError ?? '', created: e.createdAt, sent: e.sentAt ?? '' }),
+    });
+  });
+  app.get('/api/admin/emails/:id', requireStaff('notifications.send'), async (req, res) => {
+    const email = await prisma.emailOutbox.findUnique({ where: { id: uuid.parse(req.params.id) } });
+    if (!email) throw new DomainError('Email not found', 404);
+    res.json({ email });
+  });
+  app.post('/api/admin/emails/:id/retry', requireStaff('notifications.send'), async (req, res) => {
+    const id = uuid.parse(req.params.id);
+    const updated = await prisma.emailOutbox.updateMany({ where: { id, status: { in: ['FAILED', 'SKIPPED'] } }, data: { status: 'PENDING', attempts: 0, sendAfter: new Date(), lastError: null } });
+    if (!updated.count) throw new DomainError('Only failed or undelivered emails can be retried', 409);
+    await audit(prisma, { actorId: req.user.id, action: 'email.retried', entityType: 'email', entityId: id });
+    res.json({ ok: true });
   });
 
   // ───────────── Settings ─────────────

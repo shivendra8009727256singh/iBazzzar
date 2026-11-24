@@ -12,6 +12,8 @@ import { registerOrders } from './modules/orders.js';
 import { registerBusiness } from './modules/business.js';
 import { registerSeller } from './modules/seller.js';
 import { registerCommunity } from './modules/community.js';
+import { registerAccount } from './modules/account.js';
+import { configureEmail } from './lib/email.js';
 import { registerAdminPeople } from './modules/admin/people.js';
 import { registerAdminCommerce } from './modules/admin/commerce.js';
 import { registerAdminPlatform } from './modules/admin/platform.js';
@@ -67,6 +69,7 @@ export function createApp({ prisma, config, mailer, storage, payments, shipping,
   app.use('/api', limits.global, originCheck(config), loadSession(prisma));
   app.use((req, res, next) => (req.path === '/api/payments/webhook' ? next() : express.json({ limit: '256kb' })(req, res, next)));
 
+  configureEmail({ origin: config.origin });
   const ctx = { prisma, config, mailer, storage, payments, shipping, logger, limits };
   registerAuth(app, ctx);
   registerCatalog(app, ctx);
@@ -75,6 +78,7 @@ export function createApp({ prisma, config, mailer, storage, payments, shipping,
   registerBusiness(app, ctx);
   registerSeller(app, ctx);
   registerCommunity(app, ctx);
+  registerAccount(app, ctx);
   registerAdminInsights(app, ctx);
   registerAdminPeople(app, ctx);
   registerAdminCatalog(app, ctx);
