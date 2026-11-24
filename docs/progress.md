@@ -102,9 +102,8 @@ finance approves; last Admin can't be removed; CSV formula injection neutralised
 
 ### Blockers needing the owner
 
-1. **Aiven CA certificate** — download it (Aiven console → service → Overview → CA certificate), save as `.local/aiven-ca.pem`,
-   and add `DATABASE_CA_CERT_FILE=.local/aiven-ca.pem` to `.env`. Then `npm run db:seed:demo` (or `db:seed` without demo data).
-   TLS verification was deliberately not turned off.
+1. **Sample data on Aiven** — the shared database currently holds realistic sample data for review. Remove it before going live
+   (`npm run db:seed:sample -- --remove --allow-remote`). TLS follows `sslmode` in `DATABASE_URL`; no CA file is used.
 2. Razorpay test keys + webhook secret.
 3. SMTP provider (email verification and password reset need it in production).
 4. S3-compatible bucket (+ CDN) for production uploads.
@@ -115,7 +114,25 @@ finance approves; last Admin can't be removed; CSV formula injection neutralised
 
 ### Next steps
 
-1. Seed Aiven once the CA certificate is in place; create the Admin with `npm run admin:create`.
+1. Fill in Admin → Settings → Brand & site (contact details, address, GSTIN, socials) and upload final logo artwork.
 2. Push to a private GitHub repository so CI runs.
 3. Choose hosting and deploy a staging environment with Razorpay test keys.
 4. Commission artwork and onboard first real sellers.
+
+## Site branding, hero slider and premium homepage (2026-11-24)
+
+- **One place for the brand**: Admin → Settings → *Brand & site* holds logo, logo mark, site name, tagline, about text,
+  announcement bar, support email/phone/WhatsApp/hours, legal name, GSTIN, address and social links. Stored in the
+  `site` setting, served publicly by `GET /api/site` (30 s cache) and provided to every page through `SiteProvider`.
+  Header, footer, loading screen, sign-in pages, admin sidebar, page titles and emails all read it — no hard-coded brand.
+- **Hero slider**: Admin → Homepage & content → *Homepage hero slides*. Add/edit in a drawer with a live preview, upload
+  artwork, choose full-width photo or colour + side image, text theme, background colour, two buttons, schedule
+  (show from / until — "until" adds a countdown), hide/show, reorder, delete. Storefront slider autoplays (5.5 s),
+  pauses on hover/focus, respects reduced motion, has arrows, dots with progress, pause button, swipe and keyboard.
+  Five slides are seeded. The first slide's headline is the page `h1`.
+- The old CMS "Homepage hero" and "Announcement bar" text blocks are hidden in the admin (superseded by the above).
+- **Homepage** rebuilt: category icon strip, hero, promise strip, coupon cards with copy-code, deal of the day with
+  countdown, scrolling rails (best sellers, new arrivals, top rated, trending), personal/business cards, category
+  tiles, top brands, wholesale hub, featured stores, sell CTA, verified reviews. No horizontal scroll at 390 px or 1440 px.
+- Verified: lint, typecheck, 125 API tests, 13 browser tests (homepage test now also checks ≥4 slides and the Next control).
+

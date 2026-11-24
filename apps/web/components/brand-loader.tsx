@@ -1,5 +1,6 @@
-import Image from 'next/image';
+'use client';
 import { cn } from '@/lib/format';
+import { useSite } from './site-context';
 
 /**
  * The IBazzzar loader: the iB mark inside a spinning gold ring with a soft glow and a shimmering wordmark.
@@ -7,6 +8,7 @@ import { cn } from '@/lib/format';
  * who ask their device to reduce motion (see .ib-loader rules in globals.css).
  */
 export function BrandLoader({ label = 'Loading', size = 'md', fullScreen = false, className }: { label?: string; size?: 'sm' | 'md' | 'lg'; fullScreen?: boolean; className?: string }) {
+  const site = useSite();
   const px = { sm: 56, md: 84, lg: 112 }[size];
   const mark = Math.round(px * 0.62);
   const loader = (
@@ -34,11 +36,12 @@ export function BrandLoader({ label = 'Loading', size = 'md', fullScreen = false
         </svg>
         {/* The iB mark */}
         <span className="ib-loader-mark relative rounded-full overflow-hidden bg-white shadow-[0_6px_18px_-6px_rgb(9_44_32/0.45)] ring-2 ring-white" style={{ width: mark, height: mark }}>
-          <Image src="/icon.png" alt="" width={mark} height={mark} className="size-full object-cover" priority />
+          {/* eslint-disable-next-line @next/next/no-img-element -- admin-uploaded logo mark */}
+          <img src={site.logoMarkUrl} alt="" width={mark} height={mark} className="size-full object-cover" />
         </span>
       </div>
       <div className="text-center">
-        <p className="ib-loader-word font-display font-semibold tracking-wide text-[17px]" aria-hidden>IBazzzar</p>
+        <p className="ib-loader-word font-display font-semibold tracking-wide text-[17px]" aria-hidden>{site.siteName}</p>
         <p className="text-[12.5px] text-muted mt-0.5">{label}<span className="ib-loader-dots" aria-hidden /></p>
       </div>
     </div>

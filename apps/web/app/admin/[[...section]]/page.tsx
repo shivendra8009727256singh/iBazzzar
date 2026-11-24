@@ -1,6 +1,5 @@
 'use client';
 import { Suspense, use, useEffect, useRef, useState } from 'react';
-import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -15,6 +14,7 @@ import { useSession } from '@/components/providers';
 import { Alert, Spinner } from '@/components/ui';
 import { GlobalSearch } from '@/components/admin/kit';
 import { BrandLoader } from '@/components/brand-loader';
+import { Logo, LogoMark } from '@/components/logo';
 import * as P from '@/components/admin/people';
 import * as K from '@/components/admin/catalog';
 import * as C from '@/components/admin/commerce';
@@ -185,9 +185,9 @@ export default function AdminPage({ params }: { params: Promise<{ section?: stri
       <div className={cn('flex items-center gap-2 bg-white border-b border-[#e8dcc0]', narrow ? 'lg:flex-col lg:py-3 lg:px-2 px-4 py-4' : 'px-4 py-4')}>
         <Link href="/admin" className={cn('flex flex-col gap-1.5 min-w-0', narrow && 'lg:items-center')} aria-label="IBazzzar admin home">
           {narrow
-            ? <Image src="/icon.png" alt="IBazzzar" width={40} height={40} className="size-10 rounded-xl hidden lg:block" />
+            ? <LogoMark size={40} className="rounded-xl hidden lg:block" />
             : null}
-          <Image src="/branding/ibazzzar-logo.png" alt="IBazzzar" width={1621} height={685} sizes="150px" className={cn('h-auto w-[150px]', narrow && 'lg:hidden')} priority />
+          <span className={cn(narrow && 'lg:hidden')}><Logo href={null} className="[&_img]:h-[52px]" /></span>
           <span className={cn('self-start rounded-full bg-[#f7ecd2] text-gold-ink text-[10.5px] font-bold tracking-[0.14em] uppercase px-2.5 py-0.5', narrow && 'lg:hidden')}>Admin panel</span>
         </Link>
         {/* Phones only: close the drawer. On desktop the top-bar button collapses the sidebar. */}

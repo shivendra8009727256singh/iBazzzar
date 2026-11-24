@@ -16,6 +16,15 @@ import type { Category, Notification } from '@/lib/types';
 import { useCart, useSession } from './providers';
 import { Logo } from './logo';
 import { SearchBox } from './search-box';
+import { useSite } from './site-context';
+
+/** The top strip message, set in Admin → Settings → Brand & site. */
+function Announcement() {
+  const site = useSite();
+  if (!site.announcement) return <span />;
+  const body = <><Sparkles size={14} className="text-gold-light shrink-0" /><span className="truncate">{site.announcement}</span></>;
+  return site.announcementLink ? <Link href={site.announcementLink} className="flex items-center gap-2 min-w-0 hover:text-white">{body}</Link> : <span className="flex items-center gap-2 min-w-0">{body}</span>;
+}
 
 const NAV = [
   { href: '/', label: 'Home' },
@@ -155,12 +164,12 @@ export function Header() {
       {!workspace && (
         <div className="bg-emerald text-[#dfe9df] text-[13px]">
           <div className="container-page flex h-9 items-center justify-between gap-4">
-            <span className="flex items-center gap-2 truncate"><Sparkles size={14} className="text-gold-light shrink-0" />Retail and wholesale from verified sellers — one intelligent digital mall</span>
+            <Announcement />
             <nav className="hidden md:flex items-center gap-5" aria-label="Utility">
               <Link href="/support" className="flex items-center gap-1.5 hover:text-white"><Headphones size={14} />Customer support</Link>
               <Link href="/account/orders" className="flex items-center gap-1.5 hover:text-white"><Truck size={14} />Track order</Link>
               <Link href="/wholesale" className="flex items-center gap-1.5 hover:text-white"><Building2 size={14} />Business buying</Link>
-              <Link href="/sell" className="flex items-center gap-1.5 text-gold-light hover:text-white"><Store size={14} />Sell on IBazzzar</Link>
+              <Link href="/sell" className="flex items-center gap-1.5 text-gold-light hover:text-white"><Store size={14} />Sell with us</Link>
             </nav>
           </div>
         </div>

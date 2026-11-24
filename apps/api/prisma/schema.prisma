@@ -1440,7 +1440,16 @@ model Banner {
   placement String
   title     String
   subtitle  String?
-  imageUrl  String
+  /// Optional for hero slides, which can be a colour background only.
+  imageUrl  String?
+  /// Hero slides: small line above the title, buttons, text colour scheme, background and image layout.
+  eyebrow        String?
+  ctaLabel       String?
+  secondaryLabel String?
+  secondaryLink  String?
+  theme          String  @default("dark")
+  bgColor        String?
+  layout         String  @default("cover")
   alt       String
   link      String?
   startsAt  DateTime? @db.Timestamptz(3)

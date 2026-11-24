@@ -10,13 +10,16 @@ import type { Ticket } from '@/lib/types';
 import { cn, formatDate, formatDateTime, formatMoney, rupeesToPaise } from '@/lib/format';
 import { SupportThread } from '../support-thread';
 import { Alert, Badge, Button, ConfirmButton, Field, Input, Select, StatusBadge, Textarea, Checkbox } from '../ui';
+import { HeroSlides, SiteBrandForm, type BannerRow } from './site-admin';
+import type { Site } from '../site-context';
+import { withDefaults } from '../site-context';
 import { DataTable, Drawer, KV, Loadable, Pager, Section, Table, attempt, useAdminList, useAdminTable, useOpenParam, type Column, type ListResponse } from './kit';
 
 // ───────────── Homepage CMS ─────────────
 type CmsData = {
   sections: { id: string; label: string; heading: string; body: string; data: { ctaLabel?: string; ctaLink?: string }; published: boolean; version: number; updatedAt: string | null }[];
   pages: { slug: string; title: string; body: string; published: boolean; version: number; updatedAt: string }[];
-  banners: { id: string; placement: string; title: string; subtitle: string | null; imageUrl: string; alt: string; link: string | null; active: boolean }[];
+  banners: BannerRow[];
   featured: { id: string; name: string; status: string }[];
 };
 export function Cms() {
@@ -32,8 +35,9 @@ export function Cms() {
     <Section title="Homepage & content" description="Edits are versioned: if someone else saved first, you’ll be asked to reload instead of overwriting their work.">
       <Loadable query={query}>{(d) => (
         <div className="grid gap-6">
+          <HeroSlides banners={d.banners} refetch={query.refetch} />
           <div className="grid gap-4 xl:grid-cols-2">
-            {d.sections.map((s) => {
+            {d.sections.filter((s) => s.id !== 'hero' && s.id !== 'announcement').map((s) => { // hero → slides above; announcement → Settings › Brand & site
               const draft = drafts[s.id] ?? { heading: s.heading, body: s.body, ctaLabel: s.data.ctaLabel, ctaLink: s.data.ctaLink, published: s.published };
               const set = (patch: Partial<typeof draft>) => setDrafts({ ...drafts, [s.id]: { ...draft, ...patch } });
               return (
@@ -61,7 +65,7 @@ export function Cms() {
               </div>
             )}
           </section>
-          <Banners banners={d.banners} refetch={query.refetch} />
+          <Banners banners={d.banners.filter((b) => b.placement !== 'hero')} refetch={query.refetch} />
         </div>
       )}</Loadable>
     </Section>
@@ -82,7 +86,7 @@ function Banners({ banners, refetch }: { banners: CmsData['banners']; refetch: (
       <h2 className="text-lg mb-1">Banners</h2>
       <p className="text-sm text-muted mb-3">Use licensed or original artwork only. Uploaded images are re-encoded and stripped of metadata.</p>
       <div className="grid gap-3 md:grid-cols-2 mb-4">
-        {banners.map((b) => <div key={b.id} className="rounded-xl border border-line overflow-hidden"><div className="relative aspect-[3/1] bg-cream"><Image src={b.imageUrl} alt={b.alt} fill sizes="400px" className="object-cover" unoptimized /></div><div className="p-3 flex justify-between items-center"><span className="text-sm"><strong>{b.title}</strong> · {b.placement}</span><ConfirmButton variant="ghost" danger title="Delete banner?" confirmLabel="Delete" onConfirm={async () => { await del(`/admin/banners/${b.id}`); refetch(); }}>Delete</ConfirmButton></div></div>)}
+        {banners.map((b) => <div key={b.id} className="rounded-xl border border-line overflow-hidden"><div className="relative aspect-[3/1] bg-cream"><Image src={b.imageUrl ?? ''} alt={b.alt} fill sizes="400px" className="object-cover" unoptimized /></div><div className="p-3 flex justify-between items-center"><span className="text-sm"><strong>{b.title}</strong> · {b.placement}</span><ConfirmButton variant="ghost" danger title="Delete banner?" confirmLabel="Delete" onConfirm={async () => { await del(`/admin/banners/${b.id}`); refetch(); }}>Delete</ConfirmButton></div></div>)}
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Placement"><Select value={f.placement} onChange={(e) => setF({ ...f, placement: e.target.value })}>{['home', 'home-secondary', 'deals', 'wholesale', 'category'].map((p) => <option key={p}>{p}</option>)}</Select></Field>
@@ -201,6 +205,7 @@ type Settings = {
   commission: { rateBps: number };
   shipping: { freeShippingThresholdPaise: number; baseShippingPaise: number; perExtraKgPaise: number; codEnabled: boolean; codFeePaise: number; codMaxOrderPaise: number; blockedPincodePrefixes: string[]; codBlockedPincodePrefixes: string[] };
   bank: { accountName: string; accountNumber: string; ifsc: string; bankName: string; note: string };
+  site: Partial<Site> | null;
 };
 export function SettingsPanel({ canFinance }: { canFinance: boolean }) {
   const query = useQuery({ queryKey: ['admin', 'settings'], queryFn: () => api<Settings>('/admin/settings') });
@@ -220,6 +225,7 @@ function SettingsForms({ d, save, canFinance }: { d: Settings; save: (k: string,
   const list = (v: string) => v.split(/[,\s]+/).map((x) => x.trim()).filter(Boolean);
   return (
     <div className="grid gap-5 max-w-3xl">
+      <SiteBrandForm site={withDefaults(d.site)} />
       <section className="card card-pad grid gap-3">
         <h2 className="text-lg">Orders and stock</h2>
         <div className="grid gap-3 sm:grid-cols-2">

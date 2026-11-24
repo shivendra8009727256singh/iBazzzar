@@ -71,7 +71,19 @@ export async function seedReference(prisma) {
   }
   for (const [id, s] of Object.entries(HOME)) await prisma.homeSection.upsert({ where: { id }, create: { id, ...s }, update: {} });
   for (const [slug, title, body] of PAGES) await prisma.cmsPage.upsert({ where: { slug }, create: { slug, title, body: body + LEGAL_NOTE }, update: {} });
+  // Starter hero slides, only when none exist; the Admin edits, reorders, schedules or replaces them in the CMS.
+  if (!await prisma.banner.count({ where: { placement: 'hero' } })) {
+    await prisma.banner.createMany({ data: HERO_SLIDES.map((s, i) => ({ placement: 'hero', sortOrder: i, active: true, ...s })) });
+  }
 }
+
+const HERO_SLIDES = [
+  { eyebrow: 'Intelligent Digital Mall', title: 'Welcome to the Future of Shopping', subtitle: 'Retail and wholesale from verified Indian sellers, with clear prices, GST invoices and tracked delivery.', imageUrl: '/images/mall-concept.webp', alt: 'Concept art of the IBazzzar digital mall', link: '/products', ctaLabel: 'Explore products', secondaryLabel: 'Shop wholesale', secondaryLink: '/wholesale', theme: 'dark', layout: 'cover' },
+  { eyebrow: 'Gadget Days', title: 'Up to 20% off audio & wearables', subtitle: 'Earbuds, headphones and smartwatches from authorised sellers. Limited-time deal prices.', imageUrl: '/products/headphones.svg', alt: 'Wireless headphones', link: '/deals', ctaLabel: 'Shop the deal', theme: 'dark', bgColor: '#0f3d2e', layout: 'split' },
+  { eyebrow: 'Festive offer', title: 'Extra 15% off with code FESTIVE15', subtitle: 'On orders above ₹1,499, up to ₹300 off. Apply the code in your cart.', imageUrl: '/products/bag.svg', alt: 'Canvas tote bag', link: '/products?sort=discount', ctaLabel: 'Shop offers', theme: 'light', bgColor: '#f7ecd2', layout: 'split' },
+  { eyebrow: 'For businesses', title: 'Buy in bulk. Pay less per unit.', subtitle: 'Tiered wholesale prices, quotations from several sellers and GST invoices for your business.', imageUrl: '/products/box.svg', alt: 'Stack of wholesale cartons', link: '/wholesale', ctaLabel: 'Explore wholesale', secondaryLabel: 'Request a quote', secondaryLink: '/business/rfqs/new', theme: 'dark', bgColor: '#1d4f7a', layout: 'split' },
+  { eyebrow: 'Home refresh', title: 'Copperware, lamps & cotton linen', subtitle: 'Handpicked home essentials from small workshops across India.', imageUrl: '/products/lamp.svg', alt: 'Ceramic table lamp', link: '/products?category=home-and-living', ctaLabel: 'Shop home', theme: 'light', bgColor: '#e6efe9', layout: 'split' },
+];
 
 export async function seedDemo(prisma) {
   const categories = new Map((await prisma.category.findMany()).map((c) => [c.name, c]));

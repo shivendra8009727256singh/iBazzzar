@@ -7,6 +7,7 @@ import { transaction } from '../lib/db.js';
 import { audit, notify } from '../lib/audit.js';
 import { sha256, randomToken } from '../lib/security.js';
 import { nextNumber } from '../lib/sequence.js';
+import { getSetting } from '../services/settings.js';
 import { pageParams } from '../lib/http.js';
 
 export const ticketView = (t) => ({
@@ -113,6 +114,20 @@ export function registerCommunity(app, { prisma, storage, limits, mailer }) {
     res.set('Cache-Control', 'public, max-age=300');
     res.json({ page: { slug: page.slug, title: page.title, body: page.body, updatedAt: page.updatedAt } });
   });
+  /** Everything the storefront needs about the site itself: brand, contact details and the live hero slides. */
+  app.get('/api/site', async (_req, res) => {
+    const now = new Date();
+    const [site, slides] = await Promise.all([
+      getSetting(prisma, 'site'),
+      prisma.banner.findMany({
+        where: { placement: 'hero', active: true, AND: [{ OR: [{ startsAt: null }, { startsAt: { lte: now } }] }, { OR: [{ endsAt: null }, { endsAt: { gt: now } }] }] },
+        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }], take: 10,
+      }),
+    ]);
+    res.set('Cache-Control', 'public, max-age=30');
+    res.json({ site, slides: slides.map((b) => ({ id: b.id, eyebrow: b.eyebrow, title: b.title, subtitle: b.subtitle, imageUrl: b.imageUrl, alt: b.alt, link: b.link, ctaLabel: b.ctaLabel, secondaryLabel: b.secondaryLabel, secondaryLink: b.secondaryLink, theme: b.theme, bgColor: b.bgColor, layout: b.layout, endsAt: b.endsAt })) });
+  });
+
   app.get('/api/banners', async (req, res) => {
     const now = new Date();
     const placement = String(req.query.placement || 'home').slice(0, 40);

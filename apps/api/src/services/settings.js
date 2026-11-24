@@ -6,6 +6,15 @@ export const DEFAULTS = {
   commission: { rateBps: 1000 },
   shipping: DEFAULT_SHIPPING,
   bank: { accountName: '', accountNumber: '', ifsc: '', bankName: '', note: 'Bank transfer details are configured by IBazzzar finance.' },
+  // Brand and contact details used across the whole website, emails and invoices. Changed in Admin → Settings → Brand & site.
+  site: {
+    siteName: 'IBazzzar', tagline: 'Intelligent Digital Mall', logoUrl: '/branding/ibazzzar-logo.png', logoMarkUrl: '/icon.png',
+    about: 'An intelligent digital mall for shoppers, businesses and independent sellers across India.',
+    announcement: 'Retail and wholesale from verified sellers — one intelligent digital mall', announcementLink: '',
+    supportEmail: '', supportPhone: '', whatsapp: '', supportHours: 'Mon–Sat, 10 am – 7 pm',
+    legalName: '', gstin: '', address: { line1: '', line2: '', city: '', state: '', pincode: '' },
+    socials: { instagram: '', facebook: '', x: '', youtube: '', linkedin: '' },
+  },
 };
 
 export async function getSetting(db, key) {

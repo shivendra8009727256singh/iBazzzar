@@ -75,8 +75,11 @@ export function registerAdminPlatform(app, { prisma, storage, mailer }) {
   });
 
   const bannerInput = z.object({
-    placement: z.enum(['home', 'home-secondary', 'deals', 'wholesale', 'category']), title: z.string().trim().min(3).max(100), subtitle: z.string().trim().max(200).nullable().optional(),
-    imageUrl: z.string().max(300), alt: z.string().trim().min(3).max(150), link: internalLink.nullable().optional(),
+    placement: z.enum(['hero', 'home', 'home-secondary', 'deals', 'wholesale', 'category']), title: z.string().trim().min(3).max(100), subtitle: z.string().trim().max(200).nullable().optional(),
+    imageUrl: z.string().max(300).nullable().optional(), alt: z.string().trim().min(3).max(150), link: internalLink.nullable().optional(),
+    eyebrow: z.string().trim().max(60).nullable().optional(), ctaLabel: z.string().trim().max(40).nullable().optional(),
+    secondaryLabel: z.string().trim().max(40).nullable().optional(), secondaryLink: internalLink.nullable().optional(),
+    theme: z.enum(['dark', 'light']).default('dark'), bgColor: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Use a colour like #174b37').nullable().optional(), layout: z.enum(['cover', 'split']).default('cover'),
     startsAt: z.iso.datetime().nullable().optional(), endsAt: z.iso.datetime().nullable().optional(), sortOrder: z.number().int().min(0).max(100).default(0), active: z.boolean().default(true),
   });
   const bannerData = (b) => ({
@@ -98,6 +101,12 @@ export function registerAdminPlatform(app, { prisma, storage, mailer }) {
     await audit(prisma, { actorId: req.user.id, action: 'banner.updated', entityType: 'banner', entityId: id });
     res.json({ banner });
   });
+  app.put('/api/admin/banners/order', cms, async (req, res) => {
+    const { ids } = z.object({ ids: z.array(uuid).min(1).max(50) }).parse(req.body);
+    await transaction(prisma, async (tx) => { for (const [i, id] of ids.entries()) await tx.banner.update({ where: { id }, data: { sortOrder: i } }); });
+    await audit(prisma, { actorId: req.user.id, action: 'banner.reordered', entityType: 'banner', entityId: 'hero' });
+    res.json({ ok: true });
+  });
   app.delete('/api/admin/banners/:id', cms, async (req, res) => {
     const id = uuid.parse(req.params.id);
     await prisma.banner.delete({ where: { id } });
@@ -107,7 +116,9 @@ export function registerAdminPlatform(app, { prisma, storage, mailer }) {
 
   /** Platform artwork (hero scenes, category art, banners). Re-encoded like seller photos. */
   app.post('/api/admin/media', requireStaff('media.manage'), express.raw({ type: ['image/jpeg', 'image/png', 'image/webp'], limit: MAX_IMAGE_BYTES }), async (req, res) => {
-    const image = await processImage(req.body, { minSize: 400, maxSize: 2400 });
+    // Logos and icons can be small; everything else is artwork that must be large enough for wide screens.
+    const logo = req.query.purpose === 'logo';
+    const image = await processImage(req.body, logo ? { minSize: 48, maxSize: 1200 } : { minSize: 400, maxSize: 2400 });
     const stored = await storage.put(image.data, image.mime);
     const asset = await prisma.mediaAsset.create({ data: { ownerType: 'PLATFORM', uploadedBy: req.user.id, storageKey: stored.key, url: stored.url, mime: image.mime, width: image.width, height: image.height, bytes: image.data.length, originalName: String(req.get('x-file-name') || '').slice(0, 120) || null } });
     await audit(prisma, { actorId: req.user.id, action: 'media.platform-uploaded', entityType: 'media', entityId: asset.id });
@@ -240,12 +251,22 @@ export function registerAdminPlatform(app, { prisma, storage, mailer }) {
   // ───────────── Settings ─────────────
   const settingsCap = requireStaff('settings.manage');
   app.get('/api/admin/settings', settingsCap, async (_req, res) => {
-    res.json({ platform: await getSetting(prisma, 'platform'), commission: await getSetting(prisma, 'commission'), shipping: await getSetting(prisma, 'shipping'), bank: await getSetting(prisma, 'bank') });
+    res.json({ platform: await getSetting(prisma, 'platform'), commission: await getSetting(prisma, 'commission'), shipping: await getSetting(prisma, 'shipping'), bank: await getSetting(prisma, 'bank'), site: await getSetting(prisma, 'site') });
   });
   const schemas = {
     platform: z.object({ returnWindowDays: z.number().int().min(0).max(90), lowStockThreshold: z.number().int().min(0).max(10000), paymentWindowMinutes: z.number().int().min(5).max(1440), bankTransferWindowDays: z.number().int().min(1).max(30) }).partial(),
     commission: z.object({ rateBps: z.number().int().min(0).max(5000, 'Commission can be at most 50%') }),
     shipping: shippingSettingsSchema,
+    site: z.object({
+      siteName: z.string().trim().min(2).max(40), tagline: z.string().trim().max(80), about: z.string().trim().max(300),
+      logoUrl: z.string().trim().max(300).regex(/^(\/api\/media\/[0-9a-f-]{36}\.webp|\/branding\/[\w.-]+|\/icon\.png|\/images\/[\w.-]+)$/, 'Upload the image here'), logoMarkUrl: z.string().trim().max(300).regex(/^(\/api\/media\/[0-9a-f-]{36}\.webp|\/branding\/[\w.-]+|\/icon\.png|\/images\/[\w.-]+)$/, 'Upload the image here'),
+      announcement: z.string().trim().max(160), announcementLink: z.union([z.literal(''), internalLink]),
+      supportEmail: z.union([z.literal(''), z.email().max(120)]), supportPhone: z.union([z.literal(''), z.string().trim().regex(/^[0-9+\s()-]{8,20}$/, 'Enter a phone number')]),
+      whatsapp: z.union([z.literal(''), z.string().trim().regex(/^[6-9]\d{9}$/, 'Enter a 10-digit mobile number')]), supportHours: z.string().trim().max(60),
+      legalName: z.string().trim().max(120), gstin: z.union([z.literal(''), z.string().trim().toUpperCase().regex(/^[0-9]{2}[A-Z0-9]{13}$/, 'Enter the 15-character GSTIN')]),
+      address: z.object({ line1: z.string().trim().max(150), line2: z.string().trim().max(150), city: z.string().trim().max(60), state: z.string().trim().max(60), pincode: z.union([z.literal(''), z.string().regex(/^[1-9]\d{5}$/, 'Enter a 6-digit PIN code')]) }),
+      socials: z.object({ instagram: z.union([z.literal(''), z.url().max(300).refine((u) => u.startsWith('https://'), 'Use an https:// link')]), facebook: z.union([z.literal(''), z.url().max(300).refine((u) => u.startsWith('https://'), 'Use an https:// link')]), x: z.union([z.literal(''), z.url().max(300).refine((u) => u.startsWith('https://'), 'Use an https:// link')]), youtube: z.union([z.literal(''), z.url().max(300).refine((u) => u.startsWith('https://'), 'Use an https:// link')]), linkedin: z.union([z.literal(''), z.url().max(300).refine((u) => u.startsWith('https://'), 'Use an https:// link')]) }),
+    }).partial(),
     bank: z.object({ accountName: z.string().trim().max(120), accountNumber: z.string().trim().regex(/^\d{9,18}$/), ifsc: z.string().trim().toUpperCase().regex(/^[A-Z]{4}0[A-Z0-9]{6}$/), bankName: z.string().trim().max(100), note: z.string().trim().max(300) }).partial(),
   };
   app.put('/api/admin/settings/:key', settingsCap, async (req, res) => {

@@ -10,9 +10,13 @@ test('homepage shows the official logo, hero and real catalogue data', async ({ 
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto('/');
-  await expect(page.getByRole('img', { name: /iBazzzar — Intelligent Digital Mall/ }).first()).toBeVisible();
+  await expect(page.getByRole('img', { name: /IBazzzar — Intelligent Digital Mall/i }).first()).toBeVisible();
   await expect(page.getByRole('heading', { level: 1, name: 'Welcome to the Future of Shopping' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Explore Products' })).toBeVisible();
+  // Admin-managed hero carousel: at least four seeded slides with working controls.
+  expect(await page.locator('[aria-roledescription="slide"]').count()).toBeGreaterThanOrEqual(4);
+  await page.getByRole('button', { name: 'Next slide' }).click();
+  await expect(page.getByRole('tab', { name: /^Slide 2:/ })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByText('Every floor of the mall')).toBeVisible();
   await expect(page.getByRole('link', { name: /Electronics/ }).first()).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Shop for Yourself' })).toBeVisible();
