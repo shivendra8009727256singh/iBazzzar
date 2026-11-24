@@ -136,3 +136,20 @@ finance approves; last Admin can't be removed; CSV formula injection neutralised
   tiles, top brands, wholesale hub, featured stores, sell CTA, verified reviews. No horizontal scroll at 390 px or 1440 px.
 - Verified: lint, typecheck, 125 API tests, 13 browser tests (homepage test now also checks ≥4 slides and the Next control).
 
+
+## Premium restyle of remaining customer pages (2026-11-24)
+
+- Shared pieces: `PageBanner` (gradient page header with stats and actions) and `Panel` in `components/page-banner.tsx`;
+  ticket-style `CouponCard` with copy button in `components/home-sections.tsx`.
+- **Deals**: banner with live/coupon/max-discount stats and jump links, trust strip, coupon tickets, each deal as a
+  card with a gradient header and countdown (live = red/gold, upcoming = blue), everyday-discounts rail, wholesale CTA.
+- **Wholesale**: banner with CTAs, numbered "how it works", illustrative tier-pricing table (labelled as an example),
+  feature grid, source-by-category chips, popular bulk products, request-a-quote band.
+- **Stores**: banner with counts, category filter chips (`?category=`), store cards with coloured covers.
+  **Store page**: cover, overlapping avatar, product/rating/since stats, trust row, products panel, breadcrumb.
+- **Wishlist**: banner with saved count and saving vs MRP, go-to-cart, popular rail.
+- **Account overview**: greeting hero with initials, verified and member-since, stat cards, quick actions, recent
+  orders, business/seller cards. Account/business/seller side menu is now a card with the user's name.
+- **Sign-in, register, reset password**: form in a card, segmented "sign in as" control, brand panel with benefits;
+  brand name and tagline come from Brand & site.
+- Verified: lint, typecheck, 125 API tests, 13 browser tests; no horizontal scroll at 390 px or 1440 px on all of these.

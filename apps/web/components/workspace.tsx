@@ -23,17 +23,22 @@ export function WorkspaceShell({ title, nav, children, header, gate }: { title: 
     <div className="container-page py-6 md:py-8">
       {header}
       <div className="grid gap-6 lg:grid-cols-[230px_1fr]">
-        <aside aria-label={`${title} menu`}>
-          <p className="hidden lg:block eyebrow mb-3">{title}</p>
-          <nav className="flex lg:flex-col gap-1 overflow-x-auto -mx-4 px-4 lg:mx-0 lg:px-0 pb-2 lg:pb-0 lg:sticky lg:top-28">
+        <aside aria-label={`${title} menu`} className="min-w-0">
+          <div className="lg:sticky lg:top-28 lg:rounded-3xl lg:bg-white lg:border lg:border-line lg:shadow-card lg:p-3">
+          <div className="hidden lg:flex items-center gap-3 px-2 pt-1 pb-3 mb-2 border-b border-line">
+            <span className="size-10 shrink-0 rounded-xl bg-gradient-to-br from-emerald to-forest text-gold-light grid place-items-center font-display">{user.name.charAt(0).toUpperCase()}</span>
+            <span className="min-w-0"><span className="block font-semibold text-[14.5px] truncate">{user.name}</span><span className="block text-[12px] text-muted">{title}</span></span>
+          </div>
+          <nav className="flex lg:flex-col gap-1.5 lg:gap-0.5 overflow-x-auto no-scrollbar -mx-4 px-4 lg:mx-0 lg:px-0 pb-2 lg:pb-0">
             {nav.map((n) => (
               <Link key={n.href} href={n.href} aria-current={active(n) ? 'page' : undefined}
-                className={cn('flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-[14.5px] font-medium whitespace-nowrap transition', active(n) ? 'bg-emerald text-white' : 'text-ink hover:bg-mint')}>
+                className={cn('flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-[14.5px] font-medium whitespace-nowrap transition max-lg:border', active(n) ? 'bg-emerald text-white max-lg:border-emerald shadow-card' : 'text-ink hover:bg-mint max-lg:bg-white max-lg:border-line')}>
                 <n.icon size={17} className={active(n) ? 'text-gold-light' : 'text-forest'} />{n.label}
                 {!!n.badge && <span className={cn('ml-auto rounded-full px-1.5 text-[11px] font-bold', active(n) ? 'bg-gold-light text-deep' : 'bg-gold/20 text-gold-ink')}>{n.badge}</span>}
               </Link>
             ))}
           </nav>
+          </div>
         </aside>
         <section className="min-w-0">{blocked ?? children}</section>
       </div>

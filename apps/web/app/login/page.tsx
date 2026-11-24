@@ -35,9 +35,9 @@ function LoginForm() {
 
   return (
     <AuthShell title={portal === 'staff' ? 'Staff sign in' : 'Welcome back'} subtitle={<>New to IBazzzar? <Link href="/register" className="link">Create an account</Link></>}>
-      <div className="flex gap-1 mb-6 text-sm" role="tablist" aria-label="Sign in as">
+      <div className="grid grid-cols-4 gap-1 mb-6 text-[13px] sm:text-sm rounded-xl bg-mint/70 p-1" role="tablist" aria-label="Sign in as">
         {[[null, 'Shopper'], ['business', 'Business'], ['seller', 'Seller'], ['staff', 'Staff']].map(([p, l]) => (
-          <Link key={l} href={p ? `/login?portal=${p}` : '/login'} role="tab" aria-selected={portal === p} className={`rounded-lg px-3 py-1.5 font-semibold ${portal === p ? 'bg-emerald text-white' : 'bg-mint text-forest'}`}>{l}</Link>
+          <Link key={l} href={p ? `/login?portal=${p}` : '/login'} role="tab" aria-selected={portal === p} className={`rounded-lg px-2 py-2 text-center font-semibold transition ${portal === p ? 'bg-white text-forest shadow-card' : 'text-forest/70 hover:text-forest'}`}>{l}</Link>
         ))}
       </div>
       <form onSubmit={submit} className="grid gap-4" noValidate>

@@ -43,7 +43,7 @@ export default async function HomePage() {
   const topBrands = [...(brands?.brands ?? [])].sort((a, b) => b.products - a.products).slice(0, 8);
 
   return (
-    <div className="bg-[#f3f5f0]">
+    <div className="bg-[#f3f5f0] -mb-16 pb-16">
       {/* Category strip */}
       <nav aria-label="Shop by category" className="bg-white border-b border-line">
         <div className="container-page flex gap-2 md:gap-4 overflow-x-auto no-scrollbar py-3 md:justify-between">

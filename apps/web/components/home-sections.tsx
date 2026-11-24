@@ -52,6 +52,33 @@ export function Rail({ title, subtitle, href, products, accent, children }: { ti
 }
 
 type Offer = { code: string; description: string; kind: string; value: number; minOrderPaise: number; endsAt: string };
+type FullOffer = Offer & { maxDiscountPaise: number | null; mode: string };
+
+/** A ticket-style coupon with notches, terms and a one-tap copy. */
+export function CouponCard({ o, index = 0 }: { o: FullOffer; index?: number }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => { try { await navigator.clipboard.writeText(o.code); setCopied(true); setTimeout(() => setCopied(false), 1600); } catch { /* clipboard blocked */ } };
+  return (
+    <div className="relative flex rounded-2xl bg-white border border-line shadow-card overflow-hidden hover:shadow-lift hover:-translate-y-0.5 transition">
+      <div className={cn('relative w-[92px] sm:w-[104px] shrink-0 bg-gradient-to-b text-white grid place-items-center text-center px-2', OFFER_TONES[index % OFFER_TONES.length])}>
+        <span className="font-display text-[26px] leading-none">{o.kind === 'PERCENT' ? `${o.value}%` : formatMoney(o.value).replace('.00', '')}<span className="block text-[11px] font-sans font-bold tracking-[0.18em] mt-1.5">OFF</span></span>
+        <span className="absolute -right-2.5 -top-2.5 size-5 rounded-full bg-[#f3f5f0]" aria-hidden />
+        <span className="absolute -right-2.5 -bottom-2.5 size-5 rounded-full bg-[#f3f5f0]" aria-hidden />
+      </div>
+      <div className="flex-1 min-w-0 p-4 border-l-2 border-dashed border-line">
+        <p className="font-semibold leading-snug line-clamp-2">{o.description}</p>
+        <p className="text-[12px] text-muted mt-1">
+          {o.minOrderPaise ? `Min. order ${formatMoney(o.minOrderPaise)} · ` : ''}{o.maxDiscountPaise ? `Up to ${formatMoney(o.maxDiscountPaise)} · ` : ''}{o.mode === 'ANY' ? 'All orders' : o.mode === 'RETAIL' ? 'Personal orders' : 'Business orders'}
+        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="rounded-lg border border-dashed border-gold bg-cream px-2.5 py-1 font-mono font-bold tracking-wider text-forest">{o.code}</span>
+          <button type="button" onClick={copy} className="inline-flex items-center gap-1 rounded-lg bg-forest text-white hover:bg-emerald px-2.5 py-1 text-[13px] font-semibold" aria-label={`Copy code ${o.code}`}>{copied ? <><Check size={14} />Copied</> : <><Copy size={14} />Copy</>}</button>
+          <span className="text-[11.5px] text-muted ml-auto">Till {new Date(o.endsAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
 const OFFER_TONES = ['from-[#174b37] to-[#2f6b52]', 'from-[#7a5715] to-[#c99a3d]', 'from-[#1d4f7a] to-[#3b7cb5]', 'from-[#6941c6] to-[#9b7ae8]'];
 
 /** Coupon cards with a one-tap copy of the code. */
