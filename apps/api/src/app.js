@@ -21,7 +21,9 @@ import { registerAdminInsights } from './modules/admin/insights.js';
 export function createApp({ prisma, config, mailer, storage, payments, shipping, logger, redis }) {
   const app = express();
   app.disable('x-powered-by');
-  if (config.trustProxy) app.set('trust proxy', config.trustProxy);
+  // The web app forwards /api from the same machine, so a loopback hop is always trusted (that keeps the real client
+  // IP for rate limits). TRUST_PROXY adds hops for a load balancer in front, e.g. 1.
+  app.set('trust proxy', config.trustProxy ? config.trustProxy : 'loopback');
 
   app.use(helmet({
     contentSecurityPolicy: { directives: { defaultSrc: ["'none'"], frameAncestors: ["'none'"] } },

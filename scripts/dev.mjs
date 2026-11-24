@@ -84,6 +84,10 @@ if (local) {
   say('DB', applied ? `Applied ${applied} new migration(s).` : 'Schema is up to date.');
 } else {
   say('DB', `Using the remote database at ${url.hostname}. Migrations are not run automatically; use npm run db:migrate when you mean to.`);
+  if (/aivencloud\.com$/.test(url.hostname) && !process.env.DATABASE_CA_CERT && !process.env.DATABASE_CA_CERT_FILE) {
+    say('DB', 'Aiven signs connections with its own CA, so the API will refuse to connect without it. Download the CA certificate (Aiven console → your service → Overview → CA certificate), save it as certs/aiven-ca.pem and add DATABASE_CA_CERT_FILE=certs/aiven-ca.pem to .env.');
+    process.exit(1);
+  }
 }
 
 // ───────────── 2. API and web ─────────────

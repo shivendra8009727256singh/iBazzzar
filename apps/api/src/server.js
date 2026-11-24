@@ -16,6 +16,17 @@ const logger = pino({ level: config.logLevel, redact: ['req.headers.cookie', 're
 
 const prisma = createPrisma(config);
 await prisma.$connect();
+// Fail fast with a clear reason instead of reporting "ready" and failing on the first request.
+try {
+  await prisma.$queryRaw`SELECT 1`;
+} catch (error) {
+  const reason = String(error?.meta?.driverAdapterError?.cause?.reason ?? error?.message ?? error);
+  const hint = /certificate/i.test(reason)
+    ? 'The database uses its own TLS certificate. Download its CA certificate (Aiven: service → Overview → CA certificate) and set DATABASE_CA_CERT_FILE in .env to that file.'
+    : 'Check DATABASE_URL in .env and that the database is running and reachable.';
+  logger.fatal(`Cannot reach the database: ${reason}. ${hint}`);
+  process.exit(1);
+}
 
 let redis;
 if (config.redisUrl) {
