@@ -31,7 +31,7 @@ function Monogram({ b, className }: { b: BrandCard; className?: string }) {
 function BrandTile({ b, anchor }: { b: BrandCard; anchor?: string }) {
   const p = pal(b.name);
   return (
-    <Link id={anchor} href={`/products?brand=${b.slug}`} className="group rounded-3xl bg-white border border-line overflow-hidden hover:shadow-lift hover:-translate-y-1 transition duration-300 flex flex-col scroll-mt-72">
+    <Link id={anchor} href={`/products?brand=${b.slug}`} className="group rounded-3xl bg-white border border-line overflow-hidden hover:shadow-lift hover:-translate-y-1 transition duration-300 flex flex-col scroll-mt-44">
       <div className={cn('relative aspect-[4/3]', p.bg)}>
         <span className="absolute inset-0 opacity-[0.12] bg-[radial-gradient(circle_at_1px_1px,currentColor_1px,transparent_0)] [background-size:16px_16px]" aria-hidden />
         {b.image && <Image src={b.image} alt="" fill sizes="(min-width:1024px) 240px, 45vw" className="object-contain p-7 pb-9 transition-transform duration-500 group-hover:scale-110" unoptimized={b.image.startsWith('/api/')} />}
@@ -152,7 +152,7 @@ export function BrandDirectory({ brands }: { brands: BrandCard[] }) {
         )}
 
         {/* Toolbar */}
-        <div className="sticky top-[104px] md:top-[162px] z-20 rounded-2xl bg-white/95 backdrop-blur border border-line shadow-card p-2.5 md:p-3 grid gap-2.5">
+        <div className="rounded-2xl bg-white border border-line shadow-card p-2.5 md:p-3 grid gap-2.5">
           <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
             <SlidersHorizontal size={17} className="text-muted shrink-0 ml-1" aria-hidden />
             {[null, ...categories].map((c) => (
