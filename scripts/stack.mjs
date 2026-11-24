@@ -32,7 +32,7 @@ export async function startDatabase({ dir, port, persistent, seedDemo = true }) 
   await pg.start();
   if (fresh) await pg.createDatabase('ibazzzar');
   const url = `postgresql://ibazzzar:${password}@127.0.0.1:${port}/ibazzzar`;
-  const env = { ...process.env, DATABASE_URL: url, DATABASE_CA_CERT_FILE: '', DATABASE_SSL_REJECT_UNAUTHORIZED: 'true' };
+  const env = { ...process.env, DATABASE_URL: url };
   const migrate = spawnSync(process.execPath, [resolve(ROOT, 'node_modules/prisma/build/index.js'), 'migrate', 'deploy', '--config', 'apps/api/prisma.config.js'], { cwd: ROOT, env, encoding: 'utf8', windowsHide: true });
   if (migrate.status !== 0) throw new Error(migrate.stderr || migrate.stdout);
   const seed = spawnSync(process.execPath, ['apps/api/prisma/seed.js', ...(seedDemo ? ['--demo'] : [])], { cwd: ROOT, env, encoding: 'utf8', windowsHide: true });

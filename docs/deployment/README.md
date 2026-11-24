@@ -23,8 +23,10 @@ Copy `.env.example` to `.env` and fill every value. Production refuses to start 
 `DEMO_PAYMENTS=true`, a missing `APP_ENCRYPTION_KEY`, `MAIL_PROVIDER=console`, a non-https `WEB_ORIGIN`, or any Razorpay key
 that is not `rzp_test_…` (live keys stay blocked until live payments are approved — remove that check deliberately then).
 
-Managed PostgreSQL with its own CA (Aiven): download the project CA certificate from the Aiven console and set
-`DATABASE_CA_CERT_FILE=/path/to/ca.pem`. Certificate verification is always on.
+Database: only `DATABASE_URL` is needed. Its `sslmode` decides TLS with the usual PostgreSQL meaning: `require` encrypts
+the connection (what managed providers such as Aiven give you), `verify-full` also checks the server certificate against
+the machine's trusted certificates, and no sslmode means a plain connection for a database on the same host or private
+network. Moving databases is a URL change followed by `npm run db:migrate`.
 
 Secrets live in the hosting platform's secret store, never in git. Rotate `APP_ENCRYPTION_KEY` only with a re-encryption
 script (it protects seller bank account numbers).

@@ -22,7 +22,7 @@ try {
 } catch (error) {
   const reason = String(error?.meta?.driverAdapterError?.cause?.reason ?? error?.message ?? error);
   const hint = /certificate/i.test(reason)
-    ? 'The database uses its own TLS certificate. Download its CA certificate (Aiven: service → Overview → CA certificate) and set DATABASE_CA_CERT_FILE in .env to that file.'
+    ? 'The server certificate isn’t trusted on this machine. Use ?sslmode=require in DATABASE_URL (encrypted, no certificate check), or verify-full with a trusted certificate.'
     : 'Check DATABASE_URL in .env and that the database is running and reachable.';
   logger.fatal(`Cannot reach the database: ${reason}. ${hint}`);
   process.exit(1);

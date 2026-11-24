@@ -15,7 +15,7 @@ const apiPort = await freePort();
 const webPort = await freePort();
 const origin = `http://127.0.0.1:${webPort}`;
 const env = {
-  ...process.env, NODE_ENV: 'development', DATABASE_URL: db.url, DATABASE_CA_CERT_FILE: '', DATABASE_SSL_REJECT_UNAUTHORIZED: 'true',
+  ...process.env, NODE_ENV: 'development', DATABASE_URL: db.url,
   PORT: String(apiPort), HOST: '127.0.0.1', WEB_ORIGIN: origin, API_ORIGIN: `http://127.0.0.1:${apiPort}`, REDIS_URL: '',
   DEMO_PAYMENTS: 'true', RAZORPAY_KEY_ID: '', RAZORPAY_KEY_SECRET: '', RAZORPAY_WEBHOOK_SECRET: '', MAIL_PROVIDER: 'console',
   STORAGE_DRIVER: 'local', MEDIA_DIR: resolve(ROOT, '.local', 'e2e-uploads'), ADMIN_NAME: 'E2E Admin', ADMIN_EMAIL: 'e2e-admin@example.test', ADMIN_PASSWORD: 'Console-Keeper-Phrase-2026', LOG_LEVEL: 'info',

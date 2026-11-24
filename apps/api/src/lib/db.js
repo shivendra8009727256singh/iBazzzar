@@ -1,17 +1,26 @@
-// Prisma client factory. SSL settings come from config so managed databases (Aiven, RDS) work with their CA.
+// Prisma client factory. TLS follows the sslmode in DATABASE_URL, with the same meaning as psql and other PostgreSQL tools.
 import { PrismaClient, Prisma } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 
 export { Prisma };
 
-export function createPrisma({ databaseUrl, databaseSsl, poolSize = 10 }) {
+/**
+ * sslmode in the URL:
+ *   (none) or disable          → no TLS (a database on the same machine or private network)
+ *   require / prefer / allow   → encrypted; the server certificate isn't checked (what Aiven, Render, Railway hand out)
+ *   verify-ca / verify-full    → encrypted and the certificate must be trusted by this machine
+ */
+export function sslFromUrl(sslmode) {
+  if (!sslmode || sslmode === 'disable') return undefined;
+  if (sslmode === 'verify-ca' || sslmode === 'verify-full') return { rejectUnauthorized: true };
+  return { rejectUnauthorized: false };
+}
+
+export function createPrisma({ databaseUrl, poolSize = 10 }) {
   const url = new URL(databaseUrl);
-  const sslmode = url.searchParams.get('sslmode');
-  // node-postgres treats sslmode in the URL as authoritative, so it is translated into an explicit ssl object instead.
+  // node-postgres would read sslmode itself with different meanings, so it is translated into an explicit ssl object.
+  const ssl = sslFromUrl(url.searchParams.get('sslmode'));
   url.searchParams.delete('sslmode');
-  const ssl = sslmode && sslmode !== 'disable'
-    ? { rejectUnauthorized: databaseSsl?.rejectUnauthorized ?? true, ...(databaseSsl?.ca ? { ca: databaseSsl.ca } : {}) }
-    : undefined;
   const adapter = new PrismaPg({ connectionString: url.toString(), ssl, max: poolSize });
   return new PrismaClient({ adapter });
 }

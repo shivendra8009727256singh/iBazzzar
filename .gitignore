@@ -10,5 +10,3 @@ playwright-report/
 *.tsbuildinfo
 .superpowers/
 
-# Database CA certificates (public, but environment-specific)
-certs/
