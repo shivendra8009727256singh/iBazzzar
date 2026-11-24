@@ -7,7 +7,7 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "concurrently -k -n API,WEB \"npm run dev -w @ibazzzar/api\" \"npm run dev -w @ibazzzar/web\"",
+    "dev": "node scripts/dev.mjs",
     "build": "npm run build -w @ibazzzar/web",
     "test": "node scripts/test.mjs",
     "typecheck": "npm run typecheck -w @ibazzzar/web",
@@ -21,7 +21,8 @@
     "dev:db": "node scripts/dev-db.mjs",
     "test:e2e": "node scripts/e2e.mjs",
     "admin:create": "node scripts/create-admin.mjs",
-    "db:seed:sample": "node apps/api/prisma/sample-data.js"
+    "db:seed:sample": "node apps/api/prisma/sample-data.js",
+    "dev:apps": "concurrently -k -n API,WEB \"npm run dev -w @ibazzzar/api\" \"npm run dev -w @ibazzzar/web\""
   },
   "devDependencies": {
     "@eslint/js": "^9.39.0",

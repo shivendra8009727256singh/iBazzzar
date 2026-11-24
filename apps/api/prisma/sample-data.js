@@ -10,6 +10,7 @@
 //   npm run db:seed:sample              add the sample data (skips if already present)
 //   npm run db:seed:sample -- --reset   remove the old sample + old demo catalogue, then add fresh sample data
 //   npm run db:seed:sample -- --remove  remove the sample data only
+//   npm run db:seed:sample -- --remove-demo  remove only the old demo catalogue (records flagged demo), keep the sample
 import { randomBytes } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 
@@ -645,11 +646,11 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
     if (process.argv.includes('--remove') || process.argv.includes('--reset')) {
       console.log(await removeSample(prisma) ? 'Removed the previous sample data.' : 'No sample data to remove.');
     }
-    if (process.argv.includes('--reset')) {
+    if (process.argv.includes('--reset') || process.argv.includes('--remove-demo')) {
       const r = await removeDemo(prisma);
-      if (r.stores || r.products) console.log(`Removed the old demo catalogue (${r.stores} stores, ${r.products} products).`);
+      console.log(r.stores || r.products ? `Removed the old demo catalogue (${r.stores} stores, ${r.products} products).` : 'No demo catalogue to remove.');
     }
-    if (!process.argv.includes('--remove')) {
+    if (!process.argv.includes('--remove') && !process.argv.includes('--remove-demo')) {
       await seedSample(prisma, { encryptionKey: config.encryptionKey });
       console.log(`Sample accounts use example.com addresses and the password "${SAMPLE_PASSWORD}" (local only).`);
     }

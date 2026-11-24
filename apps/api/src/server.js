@@ -20,9 +20,17 @@ await prisma.$connect();
 let redis;
 if (config.redisUrl) {
   const { default: IORedis } = await import('ioredis');
-  redis = new IORedis(config.redisUrl, { maxRetriesPerRequest: 2, enableOfflineQueue: false, lazyConnect: true });
-  try { await redis.connect(); } catch (error) {
-    logger.warn({ err: error }, 'Redis unavailable; rate limits fall back to this process only');
+  // Don't retry the first connection (it's reported once below); once connected, reconnect after drops as usual.
+  redis = new IORedis(config.redisUrl, { maxRetriesPerRequest: 2, enableOfflineQueue: false, lazyConnect: true, retryStrategy: () => null });
+  let connected = false;
+  // Without a listener ioredis prints every connection error as "unhandled".
+  redis.on('error', (error) => { if (connected) logger.warn(`Redis error: ${error.message}`); });
+  try {
+    await redis.connect();
+    connected = true;
+    redis.options.retryStrategy = (times) => Math.min(times * 200, 2000);
+  } catch (error) {
+    logger.warn(`Redis unavailable at ${new URL(config.redisUrl).host} (${error.message}); rate limits fall back to this process only`);
     redis.disconnect();
     redis = undefined;
   }
