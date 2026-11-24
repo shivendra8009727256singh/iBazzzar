@@ -1,7 +1,7 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ChevronLeft, ChevronRight, ArrowRight, Pause, Play } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/format';
 import { useHeroSlides, type HeroSlide } from './site-context';
 import { Countdown } from './home-parts';
@@ -34,7 +34,7 @@ export function Slide({ s, index, total, active }: { s: HeroSlide; index: number
           )}
         </>
       )}
-      <div className="relative h-full px-5 sm:px-8 md:px-14 flex items-end md:items-center pb-14 md:pb-0">
+      <div className="relative h-full px-5 sm:px-8 md:px-14 flex items-end md:items-center pb-8 md:pb-0">
         <div className={cn('max-w-[62%] md:max-w-xl transition-all duration-700', active ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4', cover && 'max-w-xl')}>
           {s.eyebrow && <span className={cn('inline-flex items-center rounded-full px-3 py-1 text-[11px] md:text-xs font-bold uppercase tracking-[0.14em]', dark ? 'bg-gold-light/15 text-gold-light' : 'bg-forest/10 text-forest')}>{s.eyebrow}</span>}
           <Heading className={cn('mt-3 text-[26px] leading-[1.1] md:text-[50px] font-display', dark ? 'text-white' : 'text-ink')}>{s.title}</Heading>
@@ -53,18 +53,18 @@ export function Slide({ s, index, total, active }: { s: HeroSlide; index: number
   );
 }
 
-/** The homepage hero: admin-managed slides with autoplay, arrows, dots, swipe and keyboard support. */
+/** The homepage hero: admin-managed slides with autoplay, arrows (wide screens), swipe and keyboard support. */
 export function HeroSlider() {
   const slides = useHeroSlides();
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
-  const [stopped, setStopped] = useState(false);
   const [reduce, setReduce] = useState(false);
   const drag = useRef<{ x: number; t: number } | null>(null);
   const total = slides.length;
   const go = useCallback((i: number) => setIndex(((i % total) + total) % total), [total]);
   useEffect(() => { const m = window.matchMedia('(prefers-reduced-motion: reduce)'); setReduce(m.matches); const on = () => setReduce(m.matches); m.addEventListener('change', on); return () => m.removeEventListener('change', on); }, []);
-  const playing = total > 1 && !paused && !stopped && !reduce;
+  // Autoplay pauses while the pointer or keyboard focus is on the slider, and stays off for reduced-motion users.
+  const playing = total > 1 && !paused && !reduce;
   useEffect(() => {
     if (!playing) return;
     const t = setTimeout(() => go(index + 1), INTERVAL);
@@ -87,17 +87,6 @@ export function HeroSlider() {
         <>
           <button type="button" aria-label="Previous slide" onClick={() => go(index - 1)} className="hidden md:grid absolute left-4 top-1/2 -translate-y-1/2 size-11 place-items-center rounded-full bg-white/90 shadow-lift text-ink opacity-0 group-hover/hero:opacity-100 focus:opacity-100 transition hover:scale-105"><ChevronLeft size={22} /></button>
           <button type="button" aria-label="Next slide" onClick={() => go(index + 1)} className="hidden md:grid absolute right-4 top-1/2 -translate-y-1/2 size-11 place-items-center rounded-full bg-white/90 shadow-lift text-ink opacity-0 group-hover/hero:opacity-100 focus:opacity-100 transition hover:scale-105"><ChevronRight size={22} /></button>
-          <div className="absolute bottom-4 inset-x-0 flex items-center justify-center gap-2">
-            <div className="flex items-center gap-1.5 rounded-full bg-black/25 backdrop-blur px-2.5 py-1.5" role="tablist" aria-label="Choose a slide">
-              {slides.map((s, i) => (
-                <button key={s.id} type="button" role="tab" aria-selected={i === index} aria-label={`Slide ${i + 1}: ${s.title}`} onClick={() => go(i)}
-                  className={cn('relative h-2 rounded-full overflow-hidden transition-all duration-300', i === index ? 'w-8 bg-white/40' : 'w-2 bg-white/60 hover:bg-white')}>
-                  {i === index && <span key={`${index}-${playing}`} className="absolute inset-y-0 left-0 bg-white rounded-full" style={{ width: playing ? '100%' : '100%', animation: playing ? `hero-progress ${INTERVAL}ms linear` : 'none' }} />}
-                </button>
-              ))}
-              <button type="button" onClick={() => setStopped((s) => !s)} aria-label={stopped ? 'Play slideshow' : 'Pause slideshow'} className="ml-1 text-white/90 hover:text-white">{stopped ? <Play size={13} /> : <Pause size={13} />}</button>
-            </div>
-          </div>
         </>
       )}
     </section>

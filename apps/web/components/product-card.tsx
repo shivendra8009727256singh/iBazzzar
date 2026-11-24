@@ -25,7 +25,7 @@ export function ProductCard({ product: p, priority }: { product: Product; priori
     <article className="group relative flex flex-col rounded-2xl border border-line bg-white overflow-hidden transition duration-300 hover:-translate-y-0.5 hover:shadow-lift hover:border-transparent">
       <div className="relative aspect-square bg-white">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_45%,#f6f1e2,transparent_68%)]" aria-hidden />
-        <Link href={`/products/${p.slug}`} aria-label={p.name} className="block size-full">
+        <Link href={`/products/${p.slug}`} aria-label={p.name} className="relative block size-full">
           <Image src={p.image} alt={p.name} fill sizes="(min-width:1280px) 280px, (min-width:768px) 33vw, 50vw" priority={priority} className="object-contain p-7 transition-transform duration-500 group-hover:scale-[1.06]" unoptimized={p.image.startsWith('/api/')} />
         </Link>
         <div className="absolute top-3 left-3 flex flex-col gap-1.5 items-start">

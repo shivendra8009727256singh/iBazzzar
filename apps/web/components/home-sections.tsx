@@ -45,7 +45,7 @@ export function Rail({ title, subtitle, href, products, accent, children }: { ti
         </div>
       </div>
       <div ref={ref} className="flex gap-3 md:gap-4 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-1 -mx-1 px-1">
-        {children ?? products?.map((p) => <MiniProductCard key={p.catalogProductId} p={p} />)}
+        {children ?? products?.map((p, i) => <MiniProductCard key={`${p.listingId}:${i}`} p={p} />)}
       </div>
     </section>
   );

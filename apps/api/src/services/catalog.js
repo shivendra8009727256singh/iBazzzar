@@ -27,7 +27,7 @@ export async function activePromotions(db, listingIds, at = new Date()) {
   if (!listingIds.length) return new Map();
   const rows = await db.promotionItem.findMany({
     where: { listingId: { in: listingIds }, promotion: { active: true, startsAt: { lte: at }, endsAt: { gt: at } } },
-    include: { promotion: { select: { id: true, name: true, discountBps: true, endsAt: true } } },
+    include: { promotion: { select: { id: true, name: true, discountBps: true, endsAt: true } } }, relationLoadStrategy: 'join',
   });
   const best = new Map();
   for (const r of rows) {
@@ -91,15 +91,19 @@ export function shapeListing(row, promotion) {
 }
 
 /** Loads listings by id with everything pricing needs. */
+// Nested relations load in one SQL query (relationLoadStrategy 'join'), and promotions load in parallel:
+// with a remote database every extra round trip adds latency to every product page and list.
 export async function loadListings(db, ids, at = new Date()) {
   const unique = [...new Set(ids)];
-  const rows = await db.sellerListing.findMany({ where: { id: { in: unique } }, include: listingInclude });
-  const promos = await activePromotions(db, unique, at);
+  const [rows, promos] = await Promise.all([
+    db.sellerListing.findMany({ where: { id: { in: unique } }, include: listingInclude, relationLoadStrategy: 'join' }),
+    activePromotions(db, unique, at),
+  ]);
   return new Map(rows.map((r) => [r.id, shapeListing(r, promos.get(r.id))]));
 }
 
 export async function loadListingsWhere(db, where, at = new Date()) {
-  const rows = await db.sellerListing.findMany({ where, include: listingInclude });
+  const rows = await db.sellerListing.findMany({ where, include: listingInclude, relationLoadStrategy: 'join' });
   const promos = await activePromotions(db, rows.map((r) => r.id), at);
   return rows.map((r) => shapeListing(r, promos.get(r.id)));
 }

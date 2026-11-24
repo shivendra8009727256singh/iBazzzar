@@ -158,7 +158,7 @@ export function registerCatalog(app, { prisma }) {
     const promotions = await prisma.promotion.findMany({
       where: { active: true, endsAt: { gt: now }, startsAt: { lte: new Date(now.getTime() + 7 * 86_400_000) } },
       orderBy: { endsAt: 'asc' }, take: 10,
-      include: { items: { select: { listingId: true } } },
+      include: { items: { select: { listingId: true } } }, relationLoadStrategy: 'join',
     });
     const listingIds = promotions.flatMap((p) => p.items.map((i) => i.listingId));
     const listings = await loadListings(prisma, listingIds, now);

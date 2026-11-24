@@ -88,7 +88,7 @@ export default async function HomePage() {
               </div>
             </div>
             <div className="flex gap-3 md:gap-4 overflow-x-auto no-scrollbar p-4 md:p-6 snap-x">
-              {liveDeal.products.map((p) => <MiniProductCard key={p.catalogProductId} p={p} />)}
+              {liveDeal.products.map((p, i) => <MiniProductCard key={`${p.listingId}:${i}`} p={p} />)}
             </div>
           </section>
         )}

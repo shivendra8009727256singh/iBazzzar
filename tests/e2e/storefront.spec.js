@@ -16,7 +16,7 @@ test('homepage shows the official logo, hero and real catalogue data', async ({ 
   // Admin-managed hero carousel: at least four seeded slides with working controls.
   expect(await page.locator('[aria-roledescription="slide"]').count()).toBeGreaterThanOrEqual(4);
   await page.getByRole('button', { name: 'Next slide' }).click();
-  await expect(page.getByRole('tab', { name: /^Slide 2:/ })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('[aria-roledescription="slide"]').nth(1)).toHaveAttribute('aria-hidden', 'false');
   await expect(page.getByText('Every floor of the mall')).toBeVisible();
   await expect(page.getByRole('link', { name: /Electronics/ }).first()).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Shop for Yourself' })).toBeVisible();
