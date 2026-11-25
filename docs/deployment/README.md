@@ -23,6 +23,13 @@ Copy `.env.example` to `.env` and fill every value. Production refuses to start 
 `DEMO_PAYMENTS=true`, a missing `APP_ENCRYPTION_KEY`, `MAIL_PROVIDER=console`, a non-https `WEB_ORIGIN`, or any Razorpay key
 that is not `rzp_test_…` (live keys stay blocked until live payments are approved — remove that check deliberately then).
 
+Web ↔ API: set the same `INTERNAL_API_KEY` (e.g. `openssl rand -hex 24`) for the API and the web app. The web server sends it
+when it renders pages, so every visitor's page loads are not counted as one address against the 300-requests-a-minute
+limit. Production refuses to start without it. With Docker, run compose with `--env-file ../.env` so the web container gets it.
+
+Database pool: `DATABASE_POOL_SIZE` (default 4 for a hosted database, 10 for a local one). Keep it below the plan's
+connection limit minus anything else on the same server (Aiven Startup allows 15, 3 reserved).
+
 Database: only `DATABASE_URL` is needed. Its `sslmode` decides TLS with the usual PostgreSQL meaning: `require` encrypts
 the connection (what managed providers such as Aiven give you), `verify-full` also checks the server certificate against
 the machine's trusted certificates, and no sslmode means a plain connection for a database on the same host or private

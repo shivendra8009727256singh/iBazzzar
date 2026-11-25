@@ -5,6 +5,8 @@ const API = process.env.API_ORIGIN || 'http://127.0.0.1:4000';
 
 export async function serverApi<T>(path: string, { auth = false, revalidate }: { auth?: boolean; revalidate?: number } = {}): Promise<T> {
   const headers: Record<string, string> = {};
+  // Identifies this server to the API so page renders aren't rate-limited as if they were one visitor.
+  if (process.env.INTERNAL_API_KEY) headers['x-internal-key'] = process.env.INTERNAL_API_KEY;
   if (auth) {
     const jar = await cookies();
     const session = jar.get('ib_session');

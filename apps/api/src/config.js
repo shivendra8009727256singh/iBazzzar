@@ -7,6 +7,12 @@ const schema = z.object({
   HOST: z.string().default('127.0.0.1'),
   WEB_ORIGIN: z.url().default('http://127.0.0.1:3000'),
   DATABASE_URL: z.string().min(10, 'DATABASE_URL is required'),
+  // Most connections this API process opens. Small hosted plans allow few (Aiven Startup: 15, 3 reserved), and
+  // other apps on the same server share them; extra queries wait for a free connection instead of failing.
+  DATABASE_POOL_SIZE: z.coerce.number().int().min(1).max(50).optional(),
+  // Shared secret the website's server sends when it renders pages, so all visitors' page loads don't share one
+  // per-address rate limit. Set the same value for the API and the web app. `npm run dev` generates one.
+  INTERNAL_API_KEY: z.string().min(24, 'INTERNAL_API_KEY must be at least 24 characters').optional(),
   REDIS_URL: z.string().optional(),
   TRUST_PROXY: z.coerce.number().int().min(0).max(5).default(0),
   APP_ENCRYPTION_KEY: z.string().regex(/^[0-9a-f]{64}$/i, 'APP_ENCRYPTION_KEY must be 64 hex characters (32 bytes)').optional(),
@@ -28,6 +34,11 @@ const schema = z.object({
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
 });
 
+/** A database on this machine can take a bigger pool than a hosted one. */
+function isLocalDatabase(url) {
+  try { return ['127.0.0.1', 'localhost', '::1', '[::1]'].includes(new URL(url).hostname); } catch { return false; }
+}
+
 export function loadConfig(env = process.env) {
   const parsed = schema.safeParse(env);
   if (!parsed.success) {
@@ -42,6 +53,7 @@ export function loadConfig(env = process.env) {
   }
   if (production) {
     if (e.DEMO_PAYMENTS === 'true') throw new Error('DEMO_PAYMENTS cannot be enabled in production');
+    if (!e.INTERNAL_API_KEY) throw new Error('INTERNAL_API_KEY is required in production (the same value for the API and the web app)');
     if (!e.APP_ENCRYPTION_KEY) throw new Error('APP_ENCRYPTION_KEY is required in production');
     if (e.MAIL_PROVIDER === 'console') throw new Error('Configure MAIL_PROVIDER=smtp (or none) in production');
     if (!e.WEB_ORIGIN.startsWith('https://')) throw new Error('WEB_ORIGIN must use https in production');
@@ -56,6 +68,8 @@ export function loadConfig(env = process.env) {
     host: e.HOST,
     origin: e.WEB_ORIGIN,
     databaseUrl: e.DATABASE_URL,
+    poolSize: e.DATABASE_POOL_SIZE ?? (isLocalDatabase(e.DATABASE_URL) ? 10 : 4),
+    internalKey: e.INTERNAL_API_KEY ?? null,
     redisUrl: e.REDIS_URL,
     trustProxy: e.TRUST_PROXY,
     // A fixed development key keeps local data readable across restarts; production must supply its own.

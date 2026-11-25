@@ -3,7 +3,7 @@ import express from 'express';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { randomUUID } from 'node:crypto';
-import { loadSession, originCheck, limiter, errorHandler } from './http/middleware.js';
+import { loadSession, originCheck, limiter, errorHandler, isInternalRequest } from './http/middleware.js';
 import { RedisRateStore } from './http/redis-rate-store.js';
 import { registerAuth } from './modules/auth.js';
 import { registerCatalog } from './modules/catalog.js';
@@ -46,7 +46,8 @@ export function createApp({ prisma, config, mailer, storage, payments, shipping,
 
   const store = (name) => (redis ? new RedisRateStore(redis, `rl:${name}:`) : undefined);
   const limits = {
-    global: limiter({ windowMs: 60_000, limit: 300, store: store('global') }),
+    // Page renders from our own web server skip the per-address limit (they carry every visitor's page loads).
+    global: limiter({ windowMs: 60_000, limit: 300, store: store('global'), skip: (req) => isInternalRequest(req, config.internalKey) }),
     auth: limiter({ windowMs: 15 * 60_000, limit: 30, store: store('auth') }),
     adminLogin: limiter({ windowMs: 15 * 60_000, limit: 10, store: store('admin-login') }),
     reset: limiter({ windowMs: 15 * 60_000, limit: 10, store: store('reset') }),

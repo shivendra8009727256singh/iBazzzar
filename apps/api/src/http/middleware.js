@@ -1,4 +1,5 @@
 // Request context and authorisation guards. Authorisation is always decided here or in services — never by the UI.
+import { timingSafeEqual } from 'node:crypto';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { DomainError, staffRoles, orgCan } from '../../../../packages/shared/src/index.js';
@@ -137,8 +138,16 @@ export function originCheck(config) {
   };
 }
 
-export function limiter({ windowMs, limit, store }) {
-  return rateLimit({ windowMs, limit, standardHeaders: 'draft-8', legacyHeaders: false, store, message: { error: 'Too many requests. Please wait a moment and try again.' } });
+export function limiter({ windowMs, limit, store, skip }) {
+  return rateLimit({ windowMs, limit, standardHeaders: 'draft-8', legacyHeaders: false, store, skip, message: { error: 'Too many requests. Please wait a moment and try again.' } });
+}
+
+/** True when the request comes from our own web server (it knows INTERNAL_API_KEY). Constant-time comparison. */
+export function isInternalRequest(req, key) {
+  if (!key) return false;
+  const given = Buffer.from(String(req.get('x-internal-key') ?? ''));
+  const want = Buffer.from(key);
+  return given.length === want.length && timingSafeEqual(given, want);
 }
 
 /** Central error handler: one readable sentence for people, plus a per-field map forms use to highlight inputs. */

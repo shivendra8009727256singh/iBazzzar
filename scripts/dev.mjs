@@ -11,6 +11,8 @@ import { config as loadEnv } from 'dotenv';
 import { startDatabase, ROOT } from './stack.mjs';
 
 loadEnv({ path: resolve(ROOT, '.env'), quiet: true });
+// The web server and API share a secret for page renders; generate one per run unless .env sets it.
+if (!process.env.INTERNAL_API_KEY) process.env.INTERNAL_API_KEY = (await import('node:crypto')).randomBytes(24).toString('hex');
 const COLORS = { DB: '\x1b[35m', API: '\x1b[36m', WEB: '\x1b[32m', DEV: '\x1b[33m' };
 const say = (tag, line) => process.stdout.write(`${COLORS[tag]}[${tag}]\x1b[0m ${line}\n`);
 const listening = (port, host = '127.0.0.1') => new Promise((done) => {

@@ -18,7 +18,8 @@ services:
     restart: unless-stopped
   web:
     build: { context: .., dockerfile: infra/Dockerfile.web }
-    environment: { API_ORIGIN: "http://api:4000", NEXT_PUBLIC_SITE_URL: "https://ibazzzar.com" }
+    # Same INTERNAL_API_KEY as the API (run compose with --env-file ../.env); only this secret reaches the web app.
+    environment: { API_ORIGIN: "http://api:4000", NEXT_PUBLIC_SITE_URL: "https://ibazzzar.com", INTERNAL_API_KEY: "${INTERNAL_API_KEY:?INTERNAL_API_KEY must be set}" }
     ports: ["127.0.0.1:3000:3000"]
     depends_on: [api]
     restart: unless-stopped
