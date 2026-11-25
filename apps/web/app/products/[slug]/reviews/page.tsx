@@ -40,12 +40,12 @@ export default async function ProductReviewsPage({ params, searchParams }: { par
           <span className="relative size-20 shrink-0 rounded-xl bg-white border border-line overflow-hidden">
             {p.images[0] && <Image src={p.images[0].url} alt="" fill sizes="80px" className="object-contain p-2" unoptimized={p.images[0].url.startsWith('/api/')} />}
           </span>
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-[180px]">
             <p className="text-[12px] font-bold uppercase tracking-wider text-gold-ink">{p.brand.name}</p>
             <h1 className="text-[22px] md:text-[28px] leading-tight">Ratings & reviews</h1>
             <p className="text-sm text-muted line-clamp-1">{p.name}{offer ? ` · ${formatMoney(offer.pricePaise)}` : ''}</p>
           </div>
-          <Link href={`/products/${p.slug}`} className="btn btn-outline"><ArrowLeft size={16} />Back to product</Link>
+          <Link href={`/products/${p.slug}`} className="btn btn-outline max-sm:w-full"><ArrowLeft size={16} />Back to product</Link>
         </header>
         <AllReviews productId={p.id} initialPhotos={photos === 'true'} />
       </div>

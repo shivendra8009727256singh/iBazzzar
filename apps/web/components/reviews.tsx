@@ -31,22 +31,23 @@ export function useReviewPage(productId: string, params: { page?: number; size?:
 }
 
 /** Big average, star breakdown bars (clickable to filter). */
-export function RatingSummary({ summary, onPick, picked }: { summary: ReviewSummary; onPick?: (stars: number | undefined) => void; picked?: number }) {
+/** `stacked` puts the bars under the big number, for narrow places such as the all-reviews sidebar. */
+export function RatingSummary({ summary, onPick, picked, stacked }: { summary: ReviewSummary; onPick?: (stars: number | undefined) => void; picked?: number; stacked?: boolean }) {
   const total = Math.max(1, summary.count);
   return (
-    <div className="grid gap-6 sm:grid-cols-[200px_1fr] items-center">
-      <div className="text-center sm:border-r sm:border-line sm:pr-6">
+    <div className={cn("grid gap-6 items-center", !stacked && "sm:grid-cols-[200px_1fr]")}>
+      <div className={cn("text-center", stacked ? "pb-5 border-b border-line" : "sm:border-r sm:border-line sm:pr-6")}>
         <p className="text-5xl font-bold flex items-center justify-center gap-1.5">{summary.average?.toFixed(1) ?? '–'}<Star size={30} className="text-success" fill="currentColor" /></p>
         <p className="text-sm text-muted mt-1">{summary.count.toLocaleString('en-IN')} verified rating{summary.count === 1 ? '' : 's'}</p>
         {summary.withPhotos > 0 && <p className="text-xs text-muted mt-1 flex items-center justify-center gap-1"><Camera size={12} />{summary.withPhotos} with photos</p>}
       </div>
-      <ul className="grid gap-1.5">
+      <ul className="grid gap-1.5 min-w-0">
         {summary.breakdown.map((b) => {
           const on = picked === b.stars;
           const row = (
             <>
               <span className="w-8 font-semibold flex items-center gap-0.5">{b.stars}<Star size={12} fill="currentColor" /></span>
-              <span className="flex-1 h-2 rounded-full bg-mint overflow-hidden"><span className={cn('block h-full rounded-full transition-all', tone(b.stars))} style={{ width: `${(b.count / total) * 100}%` }} /></span>
+              <span className="flex-1 min-w-[60px] h-2 rounded-full bg-mint overflow-hidden"><span className={cn('block h-full rounded-full transition-all', tone(b.stars))} style={{ width: `${(b.count / total) * 100}%` }} /></span>
               <span className="w-10 text-right text-muted tabular-nums">{b.count.toLocaleString('en-IN')}</span>
             </>
           );
@@ -210,7 +211,7 @@ export function AllReviews({ productId, initialPhotos }: { productId: string; in
   return (
     <div className="grid gap-5 lg:grid-cols-[320px_minmax(0,1fr)] items-start">
       <aside className="card p-5 grid gap-5 lg:sticky lg:top-32">
-        {first ? <RatingSummary summary={first.summary} onPick={setRating} picked={rating} /> : <Skeleton className="h-40" />}
+        {first ? <RatingSummary summary={first.summary} onPick={setRating} picked={rating} stacked /> : <Skeleton className="h-40" />}
         {first && first.photos.length > 0 && !photos && <CustomerPhotos photos={first.photos} limit={6} />}
       </aside>
       <section className="card p-5 md:p-6 min-w-0" aria-label="Reviews">
