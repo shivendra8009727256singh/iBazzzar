@@ -219,7 +219,13 @@ export async function facets(db, { category }) {
     JOIN product_variants v ON v."catalogProductId" = cp.id JOIN seller_listings l ON l."variantId" = v.id JOIN seller_stores s ON s.id = l."storeId"
     WHERE cp.status = 'APPROVED' AND l.status = 'APPROVED' AND s.status = 'APPROVED' ${where}
     GROUP BY b.name, b.slug ORDER BY count DESC, b.name LIMIT 30`;
-  return { brands };
+  // Price range of sellable offers (list price, in rupees) so filter sliders can use real bounds.
+  const [range] = await db.$queryRaw`
+    SELECT COALESCE(FLOOR(MIN(l."pricePaise") / 100), 0)::int AS min, COALESCE(CEIL(MAX(l."pricePaise") / 100), 0)::int AS max
+    FROM catalog_products cp JOIN categories c ON c.id = cp."categoryId" LEFT JOIN categories pc ON pc.id = c."parentId"
+    JOIN product_variants v ON v."catalogProductId" = cp.id JOIN seller_listings l ON l."variantId" = v.id JOIN seller_stores s ON s.id = l."storeId"
+    WHERE cp.status = 'APPROVED' AND l.status = 'APPROVED' AND s.status = 'APPROVED' ${where}`;
+  return { brands, price: { min: range?.min ?? 0, max: range?.max ?? 0 } };
 }
 
 /** Rating summary per catalogue product. */

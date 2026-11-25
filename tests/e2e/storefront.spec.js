@@ -84,7 +84,7 @@ test('guest adds to cart, checks out with cash on delivery and sees the order', 
   await expect(page.getByText('Pay on delivery')).toBeVisible();
 });
 
-test('a new shopper registers, pays online in demo mode and gets a confirmed order', async ({ page }) => {
+test('a new shopper registers, pays online and gets a confirmed order', async ({ page }) => {
   await page.goto('/register');
   await page.getByLabel('Full name').fill('Asha Rao');
   await page.getByLabel('Mobile number').fill(phone());
@@ -105,9 +105,9 @@ test('a new shopper registers, pays online in demo mode and gets a confirmed ord
   await page.getByRole('button', { name: 'Continue to payment' }).click();
   await page.getByRole('button', { name: 'Review order' }).click();
   await page.getByRole('button', { name: /Place order and pay/ }).click();
-  await page.getByRole('button', { name: /Simulate payment/ }).click();
+  await page.getByRole('button', { name: /Pay .* securely/ }).click();
   await expect(page).toHaveURL(/\/account\/orders\/.+placed=1/);
-  await expect(page.getByText('Demo payment').first()).toBeVisible();
+  await expect(page.getByText('Paid', { exact: true }).first()).toBeVisible();
   await expect(page.getByText('Confirmed').first()).toBeVisible();
 });
 
