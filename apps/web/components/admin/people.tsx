@@ -23,7 +23,7 @@ export type Can = (capability: string) => boolean;
 
 // ───────────── Overview ─────────────
 type Dashboard = {
-  metrics: { orders: number; awaitingPayment: number; toShip: number; customers: number; activeSellers: number; activeRfqs: number; lowStock: number; paidGmvPaise: number | null; averageOrderPaise: number | null; platformRevenuePaise: number | null; demoGmvPaise: number | null; refundsPendingPaise: number | null; refundsPending: number };
+  metrics: { orders: number; awaitingPayment: number; toShip: number; customers: number; activeSellers: number; activeRfqs: number; lowStock: number; paidGmvPaise: number | null; averageOrderPaise: number | null; platformRevenuePaise: number | null; refundsPendingPaise: number | null; refundsPending: number };
   queues: { sellers: number; products: number; offers: number; organizations: number; returns: number; tickets: number; bankTransfers: number };
   series: { date: string; orders: number; paidGmvPaise: number | null }[];
   statusMix: { value: string; count: number }[];
@@ -34,7 +34,7 @@ type Dashboard = {
 export function Overview({ can }: { can: Can }) {
   const query = useQuery({ queryKey: ['admin', 'dashboard'], queryFn: () => api<Dashboard>('/admin/dashboard'), refetchInterval: 60_000 });
   return (
-    <Section title="Marketplace overview" description="Every figure is calculated from stored records. Demo-simulated payments are reported separately and never counted as GMV." actions={can('reports.view') && <Link href="/admin/analytics" className="btn btn-outline btn-sm"><BarChart3 size={15} />Open analytics</Link>}>
+    <Section title="Marketplace overview" description="Every figure is calculated live from your store’s orders." actions={can('reports.view') && <Link href="/admin/analytics" className="btn btn-outline btn-sm"><BarChart3 size={15} />Open analytics</Link>}>
       <Loadable query={query}>{(d) => {
         const queue = [
           [d.queues.sellers, 'seller applications', 'sellers?status=PENDING', Store], [d.queues.products, 'new products to review', 'moderation', ClipboardCheck],
@@ -50,7 +50,6 @@ export function Overview({ can }: { can: Can }) {
               <Stat label="Orders" value={d.metrics.orders} hint={`${d.metrics.awaitingPayment} awaiting payment · ${d.metrics.toShip} to ship`} icon={<Package size={18} />} />
               <Stat label="Customers · sellers" value={`${d.metrics.customers} · ${d.metrics.activeSellers}`} hint={`${d.metrics.activeRfqs} open RFQs`} icon={<Users size={18} />} tone="gold" />
             </div>
-            {!!d.metrics.demoGmvPaise && <Alert tone="info">Demo-simulated orders total {formatMoney(d.metrics.demoGmvPaise)}. Not real money; excluded from GMV.</Alert>}
             <div className="grid gap-6 xl:grid-cols-[1.6fr_1fr]">
               <section className="card card-pad"><DailyBars data={d.series} value={(x: { orders: number }) => x.orders} format={(n) => String(n)} label="Orders per day" /></section>
               <section className="card card-pad">
@@ -333,7 +332,7 @@ export function Sellers({ can }: { can: Can }) {
   const list = useAdminTable<ListResponse & { sellers: SellerRow[] }>('/admin/sellers', ['status', 'hold', 'gst']);
   const [open, setOpen] = useOpenParam();
   const columns: Column<SellerRow>[] = [
-    { key: 'name', label: 'Store', sort: 'name', always: true, render: (s) => <><p className="font-semibold">{s.name}{s.demo && <Badge tone="gold" className="ml-1">Demo</Badge>}</p><p className="text-xs text-muted">{s.legalName}</p></> },
+    { key: 'name', label: 'Store', sort: 'name', always: true, render: (s) => <><p className="font-semibold">{s.name}</p><p className="text-xs text-muted">{s.legalName}</p></> },
     { key: 'category', label: 'Category', render: (s) => s.primaryCategory ?? '—' },
     { key: 'gstin', label: 'GSTIN', hidden: true, render: (s) => <span className="font-mono text-xs">{s.gstin ?? 'Not registered'}</span> },
     { key: 'owner', label: 'Owner', hidden: true, render: (s) => s.owner?.email ?? '—' },
@@ -365,7 +364,7 @@ function SellerDrawer({ id, can, onClose }: { id: string; can: Can; onClose: () 
   const p = data?.performance;
   return (
     <Drawer open onClose={onClose} wide title={s?.name ?? 'Loading…'} subtitle={s ? `${s.legalName} · ${label(s.businessType)} · ${s.primaryCategory ?? 'No category'}` : undefined}
-      badges={s && <><StatusBadge status={s.status} />{s.gstRegistered ? <Badge tone="info">GSTIN {s.gstin}</Badge> : <Badge tone="neutral">Not GST-registered</Badge>}{s.payoutHold && <Badge tone="danger">Payouts on hold</Badge>}{s.commissionBps != null && <Badge tone="gold">Commission {pct(s.commissionBps)}</Badge>}{s.demo && <Badge tone="gold">Demo</Badge>}</>}
+      badges={s && <><StatusBadge status={s.status} />{s.gstRegistered ? <Badge tone="info">GSTIN {s.gstin}</Badge> : <Badge tone="neutral">Not GST-registered</Badge>}{s.payoutHold && <Badge tone="danger">Payouts on hold</Badge>}{s.commissionBps != null && <Badge tone="gold">Commission {pct(s.commissionBps)}</Badge>}</>}
       actions={s && can('approvals.manage') && <>
         {s.status !== 'APPROVED' && <Button size="sm" onClick={() => act({ status: 'APPROVED' }, 'Store approved')}>Approve store</Button>}
         {s.status === 'PENDING' && <ConfirmButton danger title="Reject application?" reason={{ label: 'Reason sent to the applicant' }} confirmLabel="Reject" onConfirm={(note) => act({ status: 'REJECTED', note })}>Reject</ConfirmButton>}

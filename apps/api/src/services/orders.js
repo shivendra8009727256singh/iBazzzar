@@ -136,7 +136,7 @@ export async function applyPayment(tx, orderId, { paymentStatus, reference, acto
 
   await inventory.consumeReservations(tx, order.id, `order:${order.number}`);
   const updated = await tx.order.update({ where: { id: order.id }, data: { status: 'CONFIRMED', paymentStatus, paymentRef: reference ?? null, paymentDueAt: null } });
-  await history(tx, order.id, 'CONFIRMED', { note: paymentStatus === 'DEMO_SIMULATED' ? 'Demo payment simulation — no money moved' : `Payment received${reference ? ` (${reference})` : ''}`, actorId });
+  await history(tx, order.id, 'CONFIRMED', { note: `Payment received${reference ? ` (${reference})` : ''}`, actorId });
   await audit(tx, { actorId, action: paymentStatus === 'DEMO_SIMULATED' ? 'payment.demo-simulated' : 'payment.captured', entityType: 'order', entityId: order.id, metadata: { reference } });
   await announceConfirmed(tx, updated);
   return updated;

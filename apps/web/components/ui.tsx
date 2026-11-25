@@ -254,6 +254,3 @@ export function Steps({ steps, current }: { steps: string[]; current: number }) 
   );
 }
 
-export function DemoNotice({ children }: { children?: React.ReactNode }) {
-  return <Badge tone="gold">{children ?? 'Demo item'}</Badge>;
-}

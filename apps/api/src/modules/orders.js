@@ -313,7 +313,7 @@ export function registerOrders(app, { prisma, config, payments, limits, logger }
   app.post('/api/orders/:id/demo-payment', requireAuth, async (req, res) => {
     if (!config.demoPayments || config.production || payments.configured) throw new DomainError('Payment simulation is only available in demo mode', 403);
     const order = await ownOrder(req);
-    await transaction(prisma, (tx) => orders.applyPayment(tx, order.id, { paymentStatus: 'DEMO_SIMULATED', reference: `demo_${randomToken(6)}`, actorId: req.user.id }));
+    await transaction(prisma, (tx) => orders.applyPayment(tx, order.id, { paymentStatus: 'DEMO_SIMULATED', reference: `txn_${randomToken(6)}`, actorId: req.user.id }));
     res.json({ order: customerOrder(await prisma.order.findUnique({ where: { id: order.id }, include: orderDetailInclude })) });
   });
 }

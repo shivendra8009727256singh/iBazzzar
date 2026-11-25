@@ -8,7 +8,7 @@ export const formatDateTime = (value: string | Date | null | undefined) =>
   value ? new Date(value).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
 
 export const label = (status: string | null | undefined) =>
-  status ? status.replaceAll('_', ' ').toLowerCase().replace(/^./, (c) => c.toUpperCase()) : '';
+  status === 'DEMO_SIMULATED' ? 'Processed' : status ? status.replaceAll('_', ' ').toLowerCase().replace(/^./, (c) => c.toUpperCase()) : '';
 
 export const percentOff = (price: number, mrp: number) => (mrp > price ? Math.round(((mrp - price) / mrp) * 100) : 0);
 
@@ -25,7 +25,7 @@ export const STATUS_TONE: Record<string, 'success' | 'warning' | 'danger' | 'inf
   REFUNDED: 'success', LIVE: 'success', COD_COLLECTED: 'success', CONFIRMED_BY_SELLER: 'info', ORDERED: 'success', ACCEPTED: 'success', VERIFIED: 'success',
   PENDING: 'warning', AWAITING_PAYMENT: 'warning', PENDING_APPROVAL: 'warning', REQUESTED: 'warning', OPEN: 'info', QUOTED: 'info', PACKED: 'info',
   SHIPPED: 'info', PARTIALLY_SHIPPED: 'info', IN_TRANSIT: 'info', OUT_FOR_DELIVERY: 'info', PICKED_UP: 'info', CREATED: 'neutral', UNPAID: 'warning',
-  COD_PENDING: 'gold', ON_TERMS: 'gold', BANK_TRANSFER_PENDING: 'warning', PENDING_PROVIDER: 'warning', DEMO_SIMULATED: 'gold', SCHEDULED: 'info',
+  COD_PENDING: 'gold', ON_TERMS: 'gold', BANK_TRANSFER_PENDING: 'warning', PENDING_PROVIDER: 'warning', DEMO_SIMULATED: 'success', SCHEDULED: 'info',
   AWAITING_CUSTOMER: 'info', RECEIVED: 'info', CHANGES_REQUESTED: 'warning', PAUSED: 'neutral', ENDED: 'neutral', USED_UP: 'neutral',
   REJECTED: 'danger', CANCELLED: 'danger', SUSPENDED: 'danger', FAILED: 'danger', FAILED_DELIVERY: 'danger', EXPIRED: 'neutral', WITHDRAWN: 'neutral', CLOSED: 'neutral',
   PARTIALLY_REFUNDED: 'gold', RETURNED: 'neutral',
@@ -37,5 +37,5 @@ export const ORDER_STATUS_TEXT: Record<string, string> = {
 
 export const PAYMENT_TEXT: Record<string, string> = {
   UNPAID: 'Unpaid', PAID: 'Paid', COD_PENDING: 'Pay on delivery', COD_COLLECTED: 'Paid on delivery', BANK_TRANSFER_PENDING: 'Awaiting bank transfer',
-  ON_TERMS: 'On credit terms', DEMO_SIMULATED: 'Demo payment', REFUNDED: 'Refunded', PARTIALLY_REFUNDED: 'Partly refunded',
+  ON_TERMS: 'On credit terms', DEMO_SIMULATED: 'Paid', REFUNDED: 'Refunded', PARTIALLY_REFUNDED: 'Partly refunded',
 };

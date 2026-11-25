@@ -13,7 +13,7 @@ import { api } from '@/lib/api';
 import type { Estimate, Product, Review } from '@/lib/types';
 import { cn, formatMoney, formatDate, percentOff, pct } from '@/lib/format';
 import { useCart } from './providers';
-import { Badge, Button, Modal } from './ui';
+import { Button, Modal } from './ui';
 import { Countdown } from './home-parts';
 import { ProductReviews, useReviewPage } from './reviews';
 
@@ -207,7 +207,6 @@ export function ProductDetail({ data }: { data: Detail }) {
             <div className="flex flex-wrap items-center gap-3 mt-2.5">
               <RatingLine data={data} />
               <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-forest bg-mint rounded-full px-2 py-0.5"><Award size={13} />IBazzzar verified seller</span>
-              {p.demo && <Badge tone="gold">Demonstration product</Badge>}
             </div>
 
             {/* Price */}

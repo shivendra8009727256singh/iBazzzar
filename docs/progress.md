@@ -200,3 +200,8 @@ simultaneous orders (per customer and overall limit), saved order equals the cou
 - Seller "Add product": shared uploader, max 4 photos (was 8) with guided slots (front/cover, back, side,
   close-up), drag & drop, multi-select, cover, reorder, preview. Validation enforces 4.
 - Migration `202611270001_review_media` (additive) applied to Aiven. Tests: `tests/reviews.test.js` (5).
+
+## Demo data treated as real (2026-11-25)
+- Dashboards, analytics, seller balances and payouts count every order, including simulated online payments, as real sales.
+- No "Demo" badge, filter or notice anywhere; a simulated payment shows as "Paid" with a `txn_` reference and a simulated refund as "Processed".
+- The internal `demo` column is kept (not shown) so `npm run db:seed:sample -- --remove-demo` can still clear sample records before launch. Production cannot simulate payments (DEMO_PAYMENTS is refused there).

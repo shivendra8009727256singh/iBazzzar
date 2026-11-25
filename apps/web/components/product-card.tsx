@@ -31,7 +31,6 @@ export function ProductCard({ product: p, priority }: { product: Product; priori
         <div className="absolute top-3 left-3 flex flex-col gap-1.5 items-start">
           {p.promotion && <span className="rounded-md bg-danger text-white text-[11px] font-bold px-2 py-0.5 shadow-sm">DEAL · {Math.round(p.promotion.discountBps / 100)}% OFF</span>}
           {p.stock > 0 && p.stock <= 5 && <span className="rounded-md bg-[#fdf1d8] text-[#8a5a00] text-[11px] font-bold px-2 py-0.5">Only {p.stock} left</span>}
-          {p.demo && <span className="rounded-md bg-[#f7ecd2] text-gold-ink text-[11px] font-bold px-2 py-0.5">Demo</span>}
         </div>
         <button onClick={() => toggleWishlist(p.catalogProductId)} aria-pressed={saved} aria-label={saved ? `Remove ${p.name} from wishlist` : `Save ${p.name} to wishlist`}
           className="absolute top-3 right-3 size-9 rounded-full bg-white shadow-card border border-line grid place-items-center hover:scale-110 transition">

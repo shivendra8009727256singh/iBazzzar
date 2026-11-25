@@ -91,12 +91,12 @@ type Product360 = {
 type CatalogRefs = { categories: { id: string; name: string; slug: string; active: boolean; parentId: string | null }[]; taxClasses: { id: string; name: string; gstRateBps: number }[] };
 
 export function Products({ can }: { can: Can }) {
-  const list = useAdminTable<ListResponse & { products: ProductRow[] }>('/admin/products', ['status', 'category', 'featured', 'demo']);
+  const list = useAdminTable<ListResponse & { products: ProductRow[] }>('/admin/products', ['status', 'category', 'featured']);
   const refs = useQuery({ queryKey: ['admin', 'categories'], queryFn: () => api<CatalogRefs>('/admin/categories') });
   const [open, setOpen] = useOpenParam();
   const columns: Column<ProductRow>[] = [
     { key: 'image', label: 'Photo', render: (p) => (p.image ? <Image src={p.image} alt="" width={40} height={40} className="size-10 rounded bg-cream object-contain" unoptimized /> : <span className="size-10 block rounded bg-cream" />) },
-    { key: 'name', label: 'Product', sort: 'name', always: true, render: (p) => <><p className="font-semibold">{p.name}{p.featured && <Badge tone="gold" className="ml-1">Featured</Badge>}{p.demo && <Badge tone="neutral" className="ml-1">Demo</Badge>}</p><p className="text-xs text-muted">{p.brand} · {p.variants} variant{p.variants === 1 ? '' : 's'}</p></> },
+    { key: 'name', label: 'Product', sort: 'name', always: true, render: (p) => <><p className="font-semibold">{p.name}{p.featured && <Badge tone="gold" className="ml-1">Featured</Badge>}</p><p className="text-xs text-muted">{p.brand} · {p.variants} variant{p.variants === 1 ? '' : 's'}</p></> },
     { key: 'category', label: 'Category', render: (p) => p.category },
     { key: 'hsn', label: 'HSN · GST', hidden: true, render: (p) => <span className="text-sm">{p.hsnCode ?? '—'} · {p.gstRateBps == null ? 'category' : pct(p.gstRateBps)}</span> },
     { key: 'sellers', label: 'Sellers', className: 'text-right', render: (p) => p.sellers },
@@ -112,7 +112,6 @@ export function Products({ can }: { can: Can }) {
           { key: 'status', label: 'Status', options: [['APPROVED', 'Live'], ['PENDING', 'Pending'], ['CHANGES_REQUESTED', 'Changes requested'], ['PAUSED', 'Paused'], ['REJECTED', 'Rejected']] },
           { key: 'category', label: 'Category', options: (refs.data?.categories ?? []).map((c) => [c.slug, c.name]) },
           { key: 'featured', label: 'Homepage', options: [['yes', 'Featured']] },
-          { key: 'demo', label: 'Data', options: [['no', 'Real only'], ['yes', 'Demo only']] },
         ]}
         bulk={{ endpoint: '/admin/products/bulk', actions: [{ id: 'approve', label: 'Approve' }, { id: 'feature', label: 'Feature' }, { id: 'unfeature', label: 'Unfeature' }, { id: 'resume', label: 'Resume' }, { id: 'pause', label: 'Pause', danger: true, reason: 'required' }, { id: 'reject', label: 'Reject', danger: true, reason: 'required' }] }} />
       {open && <ProductDrawer id={open} can={can} refs={refs.data} onClose={() => { setOpen(null); list.refetch(); }} />}
@@ -130,7 +129,7 @@ function ProductDrawer({ id, can, refs, onClose }: { id: string; can: Can; refs?
   const move = (i: number, dir: -1 | 1) => { if (!edit) return; const imgs = [...edit.images]; const j = i + dir; if (j < 0 || j >= imgs.length) return; [imgs[i], imgs[j]] = [imgs[j], imgs[i]]; setEdit({ ...edit, images: imgs }); };
   return (
     <Drawer open onClose={onClose} wide title={p?.name ?? 'Loading…'} subtitle={p ? `${p.brand.name} · ${p.category.name} · HSN ${p.hsnCode ?? 'not set'}` : undefined}
-      badges={p && <><StatusBadge status={p.status} />{p.featured && <Badge tone="gold">Featured</Badge>}{p.demo && <Badge tone="neutral">Demo</Badge>}</>}
+      badges={p && <><StatusBadge status={p.status} />{p.featured && <Badge tone="gold">Featured</Badge>}</>}
       actions={p && <>
         {!edit && <Button size="sm" onClick={startEdit}>Edit content</Button>}
         {p.status === 'APPROVED' && <Button size="sm" variant="outline" onClick={() => save({ featured: !p.featured }, p.featured ? 'Removed from homepage' : 'Featured on homepage')}>{p.featured ? 'Unfeature' : 'Feature on homepage'}</Button>}

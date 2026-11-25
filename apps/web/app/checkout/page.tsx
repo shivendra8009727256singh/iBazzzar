@@ -124,7 +124,7 @@ export default function CheckoutPage() {
           {awaiting && o.paymentMethod === 'ONLINE' && (
             <div className="mt-6 grid gap-3">
               <p className="text-sm text-muted">We’re holding your items until {new Date(o.paymentDueAt!).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}. Complete payment to confirm.</p>
-              <Button size="lg" loading={busy} onClick={pay}>{placed.payment.provider === 'demo' ? 'Simulate payment (demo — no money moves)' : `Pay ${formatMoney(o.totalPaise)} securely`}</Button>
+              <Button size="lg" loading={busy} onClick={pay}>{`Pay ${formatMoney(o.totalPaise)} securely`}</Button>
             </div>
           )}
           {o.paymentMethod === 'BANK_TRANSFER' && <p className="mt-6 text-sm">Bank details and your reference are on the order page. Your items are held until {new Date(o.paymentDueAt!).toLocaleDateString('en-IN')}.</p>}

@@ -295,7 +295,7 @@ export function registerAdminCommerce(app, { prisma, payments, shipping, mailer,
   app.get('/api/admin/finance', requireStaff('finance.view'), async (req, res) => {
     const storeFilter = req.query.store ? { storeId: uuid.parse(req.query.store) } : {};
     const [sums, stores, ledger, payouts, rules] = await Promise.all([
-      prisma.settlementEntry.groupBy({ by: ['storeId', 'kind', 'demo'], _sum: { amountPaise: true } }),
+      prisma.settlementEntry.groupBy({ by: ['storeId', 'kind'], _sum: { amountPaise: true } }),
       prisma.sellerStore.findMany({ select: { id: true, name: true, payoutHold: true, payoutHoldReason: true, commissionBps: true, payoutAccount: { select: { accountLast4: true, ifsc: true, verified: true } } } }),
       prisma.settlementEntry.findMany({ orderBy: { createdAt: 'desc' }, take: 300, where: storeFilter }),
       prisma.payoutRecord.findMany({ orderBy: { createdAt: 'desc' }, take: 100, where: storeFilter }),
@@ -304,14 +304,13 @@ export function registerAdminCommerce(app, { prisma, payments, shipping, mailer,
     const name = new Map(stores.map((s) => [s.id, s.name]));
     const balances = stores.map((s) => {
       const own = sums.filter((x) => x.storeId === s.id);
-      const real = (k) => m(own.find((x) => x.kind === k && !x.demo)?._sum.amountPaise ?? 0);
+      const real = (k) => m(own.find((x) => x.kind === k)?._sum.amountPaise ?? 0);
       return {
         storeId: s.id, seller: s.name, payoutAccount: s.payoutAccount, payoutHold: s.payoutHold, payoutHoldReason: s.payoutHoldReason, commissionBps: s.commissionBps,
         salesPaise: real('SALE'), shippingPaise: real('SHIPPING_FEE'), commissionPaise: -(real('COMMISSION') + real('COMMISSION_REVERSAL')), refundsPaise: -real('REFUND_ADJUSTMENT'), paidOutPaise: -real('PAYOUT'),
-        payablePaise: own.filter((x) => !x.demo).reduce((t, x) => t + m(x._sum.amountPaise ?? 0), 0),
-        demoPaise: own.filter((x) => x.demo).reduce((t, x) => t + m(x._sum.amountPaise ?? 0), 0),
+        payablePaise: own.reduce((t, x) => t + m(x._sum.amountPaise ?? 0), 0),
       };
-    }).filter((b) => b.salesPaise || b.demoPaise || b.paidOutPaise);
+    }).filter((b) => b.salesPaise || b.payablePaise || b.paidOutPaise);
     res.json({
       balances,
       ledger: ledger.map((e) => ({ ...e, amountPaise: m(e.amountPaise), seller: name.get(e.storeId) })),
@@ -332,7 +331,7 @@ export function registerAdminCommerce(app, { prisma, payments, shipping, mailer,
       if (!store) throw new DomainError('Seller not found', 404);
       if (store.payoutHold) throw new DomainError(`Payouts to this seller are on hold: ${store.payoutHoldReason ?? 'no reason recorded'}. Release the hold first.`, 409);
       if (!store.payoutAccount?.verified) throw new DomainError('Verify the seller’s bank account before recording a payout', 409);
-      const balance = await tx.settlementEntry.aggregate({ where: { storeId: body.storeId, demo: false }, _sum: { amountPaise: true } });
+      const balance = await tx.settlementEntry.aggregate({ where: { storeId: body.storeId }, _sum: { amountPaise: true } });
       const payable = m(balance._sum.amountPaise ?? 0);
       if (body.amountPaise > payable) throw new DomainError(`This is more than the seller’s payable balance of ${money(payable)}`, 409);
       const payout = await tx.payoutRecord.create({ data: { storeId: body.storeId, amountPaise: body.amountPaise, providerRef: body.providerRef, recordedBy: req.user.id } });

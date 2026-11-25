@@ -96,14 +96,13 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
         <div className="flex flex-wrap gap-2 items-center">
           <StatusBadge status={o.status} text={ORDER_STATUS_TEXT[o.status]} />
           <StatusBadge status={o.paymentStatus} text={PAYMENT_TEXT[o.paymentStatus]} />
-          {o.demo && <Badge tone="gold">Demo order — no money moved</Badge>}
         </div>
       </div>
 
       {payment.required && o.paymentMethod === 'ONLINE' && (
         <div className="card card-pad flex flex-wrap items-center justify-between gap-4 border-warning/40 bg-warning-bg/40">
           <div><p className="font-semibold">Payment pending</p><p className="text-sm text-muted">Items are held until {formatDateTime(o.paymentDueAt)}. After that the order is cancelled and stock released.</p></div>
-          {payment.provider ? <Button loading={paying} onClick={pay}>{payment.provider === 'demo' ? 'Simulate payment (demo)' : `Pay ${formatMoney(o.totalPaise)}`}</Button> : <p className="text-sm text-danger">Online payment is temporarily unavailable.</p>}
+          {payment.provider ? <Button loading={paying} onClick={pay}>{`Pay ${formatMoney(o.totalPaise)}`}</Button> : <p className="text-sm text-danger">Online payment is temporarily unavailable.</p>}
         </div>
       )}
       {data.bankTransfer && (

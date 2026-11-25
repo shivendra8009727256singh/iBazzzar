@@ -4,10 +4,10 @@ import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { IndianRupee, Percent, RotateCcw, Landmark } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatDate, formatMoney, label, pct, cn } from '@/lib/format';
-import { Alert, Badge, PageHeader, Pagination, Spinner, Stat } from '@/components/ui';
+import { Alert, PageHeader, Pagination, Spinner, Stat } from '@/components/ui';
 
 type Data = {
-  summary: { salesPaise: number; shippingPaise: number; commissionPaise: number; refundsPaise: number; paidOutPaise: number; payablePaise: number; demoPaise: number; commissionRateBps: number };
+  summary: { salesPaise: number; shippingPaise: number; commissionPaise: number; refundsPaise: number; paidOutPaise: number; payablePaise: number; commissionRateBps: number };
   entries: { id: string; kind: string; amountPaise: number; status: string; note: string | null; demo: boolean; createdAt: string }[];
   payouts: { id: string; amountPaise: number; providerRef: string; createdAt: string }[];
   page: number; pages: number;
@@ -28,12 +28,11 @@ export default function SellerPaymentsPage() {
         <Stat label="Commission" value={formatMoney(s.commissionPaise)} icon={<Percent size={18} />} />
         <Stat label="Refunds" value={formatMoney(s.refundsPaise)} icon={<RotateCcw size={18} />} />
       </div>
-      {s.demoPaise !== 0 && <div className="mb-5"><Alert tone="info">{formatMoney(s.demoPaise)} comes from demo orders. It is shown separately and never paid out.</Alert></div>}
       <div className="grid gap-6 xl:grid-cols-[1.5fr_1fr]">
         <section>
           <h2 className="text-lg mb-3">Ledger</h2>
           <div className="table-wrap"><table className="table"><thead><tr><th>Date</th><th>Entry</th><th className="text-right">Amount</th></tr></thead>
-            <tbody>{data.entries.map((e) => <tr key={e.id}><td className="whitespace-nowrap">{formatDate(e.createdAt)}</td><td>{label(e.kind)}{e.demo && <Badge tone="gold" className="ml-2">Demo</Badge>}<span className="block text-xs text-muted">{e.note}</span></td><td className={cn('text-right font-semibold tabular-nums', e.amountPaise < 0 ? 'text-danger' : 'text-success')}>{e.amountPaise < 0 ? '−' : '+'}{formatMoney(Math.abs(e.amountPaise))}</td></tr>)}
+            <tbody>{data.entries.map((e) => <tr key={e.id}><td className="whitespace-nowrap">{formatDate(e.createdAt)}</td><td>{label(e.kind)}<span className="block text-xs text-muted">{e.note}</span></td><td className={cn('text-right font-semibold tabular-nums', e.amountPaise < 0 ? 'text-danger' : 'text-success')}>{e.amountPaise < 0 ? '−' : '+'}{formatMoney(Math.abs(e.amountPaise))}</td></tr>)}
               {!data.entries.length && <tr><td colSpan={3} className="text-muted text-center py-8">No ledger entries yet.</td></tr>}</tbody></table></div>
           <Pagination page={data.page} pages={data.pages} onChange={setPage} />
         </section>

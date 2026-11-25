@@ -14,9 +14,9 @@ import { useSession } from '../providers';
 import { Alert, StatusBadge } from '../ui';
 import type { Can } from './people';
 
-type Win = { orders: number; buyers: number; gmvPaise: number | null; demoOrders: number; demoGmvPaise: number | null; awaitingPayment: number };
+type Win = { orders: number; buyers: number; gmvPaise: number | null; awaitingPayment: number };
 type Dashboard = {
-  metrics: { orders: number; awaitingPayment: number; toShip: number; customers: number; activeSellers: number; activeRfqs: number; lowStock: number; paidGmvPaise: number | null; averageOrderPaise: number | null; platformRevenuePaise: number | null; demoGmvPaise: number | null; refundsPendingPaise: number | null; refundsPending: number };
+  metrics: { orders: number; awaitingPayment: number; toShip: number; customers: number; activeSellers: number; activeRfqs: number; lowStock: number; paidGmvPaise: number | null; averageOrderPaise: number | null; platformRevenuePaise: number | null; refundsPendingPaise: number | null; refundsPending: number };
   queues: { sellers: number; products: number; offers: number; organizations: number; returns: number; tickets: number; bankTransfers: number };
   series: { date: string; orders: number; paidGmvPaise: number | null }[];
   statusMix: { value: string; count: number }[];
@@ -180,7 +180,7 @@ export function Dashboard({ can }: { can: Can }) {
             <div>
               <p className="text-gold-light text-sm font-semibold flex items-center gap-1.5"><Sparkles size={15} />{new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
               <h1 className="text-[28px] md:text-[34px] text-white mt-1">{greeting}, {user?.name.split(' ')[0]}</h1>
-              <p className="text-white/75 mt-1 max-w-xl">Marketplace overview: everything here is calculated from stored records, and demo payments are never counted as sales.</p>
+              <p className="text-white/75 mt-1 max-w-xl">Marketplace overview: everything here is calculated live from your store’s orders.</p>
               <div className="flex flex-wrap gap-2 mt-4">
                 {can('reports.view') && <Link href="/admin/analytics" className="btn btn-sm bg-white text-forest hover:bg-ivory"><BarChart3 size={15} />Analytics</Link>}
                 {can('orders.view') && <Link href="/admin/orders" className="btn btn-sm border border-white/30 text-white hover:bg-white/10"><ShoppingBag size={15} />Orders</Link>}
@@ -193,13 +193,12 @@ export function Dashboard({ can }: { can: Can }) {
                   <p className="text-xs text-white/70">Today’s orders</p>
                   <p className="text-3xl font-bold"><CountUp value={x.today.orders} /></p>
                   <p className="text-[11px] text-white/70">yesterday {x.yesterday.orders}</p>
-                  {(x.today.demoOrders > 0 || x.today.awaitingPayment > 0) && <p className="text-[11px] text-gold-light mt-0.5">{[x.today.awaitingPayment ? `+${x.today.awaitingPayment} awaiting payment` : '', x.today.demoOrders ? `+${x.today.demoOrders} demo` : ''].filter(Boolean).join(' · ')}</p>}
+                  {x.today.awaitingPayment > 0 && <p className="text-[11px] text-gold-light mt-0.5">+{x.today.awaitingPayment} awaiting payment</p>}
                 </div>
                 <div className="rounded-2xl bg-white/10 border border-white/15 backdrop-blur px-4 py-3">
                   <p className="text-xs text-white/70">Today’s sales</p>
                   <p className="text-2xl sm:text-3xl font-bold break-words">{x.today.gmvPaise == null ? '—' : <CountUp value={x.today.gmvPaise} format={rupees} />}</p>
                   <p className="text-[11px] text-white/70">{x.yesterday.gmvPaise == null ? 'finance only' : `yesterday ${rupees(x.yesterday.gmvPaise)}`}</p>
-                  {!!x.today.demoGmvPaise && <p className="text-[11px] text-gold-light mt-0.5">+{rupees(x.today.demoGmvPaise)} in demo orders</p>}
                 </div>
               </div>
             )}
@@ -231,7 +230,6 @@ export function Dashboard({ can }: { can: Can }) {
           </Reveal>
         ))}
       </div>
-      {!!d.metrics.demoGmvPaise && <Alert tone="info">Demo-simulated orders total {formatMoney(d.metrics.demoGmvPaise)}. Not real money; excluded from sales.</Alert>}
 
       {/* Chart and attention */}
       <div className="grid gap-5 grid-cols-1 xl:grid-cols-[1.7fr_1fr]">

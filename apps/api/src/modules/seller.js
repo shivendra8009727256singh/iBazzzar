@@ -75,7 +75,7 @@ export function registerSeller(app, { prisma, storage, shipping, config }) {
         WHERE so."storeId" = ${storeId}::uuid AND oi."orderId" IS NOT NULL AND o.status NOT IN ('AWAITING_PAYMENT', 'CANCELLED') AND so."createdAt" >= ${since}
         GROUP BY oi.name ORDER BY units DESC LIMIT 5`,
       prisma.$queryRaw`SELECT AVG(r.rating)::float AS average, COUNT(*)::int AS count FROM reviews r JOIN order_items oi ON oi.id = r."orderItemId" JOIN seller_orders so ON so.id = oi."sellerOrderId" WHERE so."storeId" = ${storeId}::uuid`,
-      prisma.settlementEntry.aggregate({ where: { storeId, demo: false }, _sum: { amountPaise: true } }),
+      prisma.settlementEntry.aggregate({ where: { storeId }, _sum: { amountPaise: true } }),
     ]);
     const days = [...Array(30)].map((_, i) => {
       const day = new Date(Date.now() + 5.5 * 3600_000 - (29 - i) * 86_400_000).toISOString().slice(0, 10);
@@ -323,17 +323,16 @@ export function registerSeller(app, { prisma, storage, shipping, config }) {
     const [entries, total, sums, payouts, settings] = await Promise.all([
       prisma.settlementEntry.findMany({ where: { storeId: req.storeId }, orderBy: { createdAt: 'desc' }, skip: paging.skip, take: paging.take }),
       prisma.settlementEntry.count({ where: { storeId: req.storeId } }),
-      prisma.settlementEntry.groupBy({ by: ['kind', 'demo'], where: { storeId: req.storeId }, _sum: { amountPaise: true } }),
+      prisma.settlementEntry.groupBy({ by: ['kind'], where: { storeId: req.storeId }, _sum: { amountPaise: true } }),
       prisma.payoutRecord.findMany({ where: { storeId: req.storeId }, orderBy: { createdAt: 'desc' }, take: 50 }),
       getSetting(prisma, 'commission'),
     ]);
-    const real = (k) => m(sums.find((s) => s.kind === k && !s.demo)?._sum.amountPaise ?? 0);
+    const real = (k) => m(sums.find((s) => s.kind === k)?._sum.amountPaise ?? 0);
     res.json({
       summary: {
         salesPaise: real('SALE'), shippingPaise: real('SHIPPING_FEE'), commissionPaise: -(real('COMMISSION') + real('COMMISSION_REVERSAL')),
         refundsPaise: -real('REFUND_ADJUSTMENT'), paidOutPaise: -real('PAYOUT'),
-        payablePaise: sums.filter((s) => !s.demo).reduce((t, s) => t + m(s._sum.amountPaise ?? 0), 0),
-        demoPaise: sums.filter((s) => s.demo).reduce((t, s) => t + m(s._sum.amountPaise ?? 0), 0),
+        payablePaise: sums.reduce((t, s) => t + m(s._sum.amountPaise ?? 0), 0),
         commissionRateBps: settings.rateBps,
       },
       entries: entries.map((e) => ({ id: e.id, kind: e.kind, amountPaise: m(e.amountPaise), status: e.status, note: e.note, demo: e.demo, orderId: e.orderId, createdAt: e.createdAt })),

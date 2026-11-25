@@ -314,21 +314,27 @@ describe('Homepage deal block', () => {
 });
 
 describe('Dashboard today', () => {
-  it('in demo mode a COD order is real and counted today; a simulated online order shows as demo, not as sales', async () => {
+  it('counts COD and simulated online payments as sales today; unpaid orders show as awaiting payment', async () => {
     const before = (await admin.agent.get('/api/admin/dashboard/extra')).body.today;
     const shopper = await ctx.register('customer');
     const items = [{ listingId: listing.id, quantity: listing.moq }];
     const cod = await shopper.agent.post('/api/checkout').set('Idempotency-Key', key()).send({ items, address, paymentMethod: 'COD' });
     expect(cod.status).toBe(201);
-    expect((await ctx.prisma.order.findUnique({ where: { id: cod.body.order.id } })).demo).toBe(false);
     const online = await shopper.agent.post('/api/checkout').set('Idempotency-Key', key()).send({ items, address, paymentMethod: 'ONLINE' });
     expect(online.status).toBe(201);
-    expect((await ctx.prisma.order.findUnique({ where: { id: online.body.order.id } })).demo).toBe(true);
 
-    const after = (await admin.agent.get('/api/admin/dashboard/extra')).body.today;
-    expect(after.orders).toBe(before.orders + 1);
-    expect(after.gmvPaise).toBe(before.gmvPaise + cod.body.order.totalPaise);
-    expect(after.demoOrders).toBe(before.demoOrders + 1);
-    expect(after.demoGmvPaise).toBe(before.demoGmvPaise + online.body.order.totalPaise);
+    const unpaid = (await admin.agent.get('/api/admin/dashboard/extra')).body.today;
+    expect(unpaid.orders).toBe(before.orders + 1);
+    expect(unpaid.awaitingPayment).toBe(before.awaitingPayment + 1);
+    expect(unpaid).not.toHaveProperty('demoOrders');
+
+    expect((await shopper.agent.post(`/api/orders/${online.body.order.id}/demo-payment`).send({})).status).toBe(200);
+    const paid = (await admin.agent.get('/api/admin/dashboard/extra')).body.today;
+    expect(paid.orders).toBe(before.orders + 2);
+    expect(paid.gmvPaise).toBe(before.gmvPaise + cod.body.order.totalPaise + online.body.order.totalPaise);
+    expect(paid.awaitingPayment).toBe(before.awaitingPayment);
+    const dash = (await admin.agent.get('/api/admin/dashboard')).body.metrics;
+    expect(dash).not.toHaveProperty('demoGmvPaise');
+    expect(dash.paidGmvPaise).toBeGreaterThanOrEqual(online.body.order.totalPaise);
   });
 });

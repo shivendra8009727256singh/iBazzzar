@@ -21,7 +21,6 @@ export function OrderRow({ order: o, href }: { order: Order; href: string }) {
         <StatusBadge status={o.status} text={ORDER_STATUS_TEXT[o.status]} />
         <StatusBadge status={o.paymentStatus} text={PAYMENT_TEXT[o.paymentStatus]} />
         {o.mode === 'BUSINESS' && <Badge tone="info">Business</Badge>}
-        {o.demo && <Badge tone="gold">Demo</Badge>}
       </div>
       <p className="price md:w-28 md:text-right">{formatMoney(o.totalPaise)}</p>
       <ChevronRight size={18} className="text-muted hidden md:block" />

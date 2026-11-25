@@ -43,7 +43,6 @@ export function registerAdminPeople(app, { prisma }) {
       ...(type === 'business' ? { orgMemberships: { some: {} } } : {}),
       ...(type === 'customer' ? { roles: { none: {} }, sellerMemberships: { none: {} }, orgMemberships: { none: {} } } : {}),
       ...(type === 'guest' ? { passwordHash: 'guest$unset' } : {}),
-      demo: false,
     };
   }
 
@@ -76,7 +75,7 @@ export function registerAdminPeople(app, { prisma }) {
     const [orders, orderStats, spent, returns, refunds, tickets, activity, sessions, wishlist, cart] = await Promise.all([
       prisma.order.findMany({ where: { userId: id }, orderBy: { createdAt: 'desc' }, take: 25, select: { id: true, number: true, createdAt: true, status: true, paymentStatus: true, paymentMethod: true, mode: true, totalPaise: true } }),
       prisma.order.groupBy({ by: ['status'], where: { userId: id }, _count: { _all: true } }),
-      prisma.order.aggregate({ where: { userId: id, paymentStatus: { in: PAID }, demo: false }, _sum: { totalPaise: true }, _count: { _all: true }, _max: { createdAt: true } }),
+      prisma.order.aggregate({ where: { userId: id, paymentStatus: { in: PAID } }, _sum: { totalPaise: true }, _count: { _all: true }, _max: { createdAt: true } }),
       prisma.returnRequest.count({ where: { userId: id } }),
       prisma.refund.aggregate({ where: { order: { userId: id } }, _sum: { amountPaise: true } }),
       prisma.supportTicket.findMany({ where: { userId: id }, orderBy: { updatedAt: 'desc' }, take: 10, select: { id: true, number: true, subject: true, status: true, updatedAt: true } }),
@@ -254,7 +253,7 @@ export function registerAdminPeople(app, { prisma }) {
     if (!o) throw new DomainError('Business account not found', 404);
     const [orders, spend, rfqs, pos, outstanding, activity] = await Promise.all([
       prisma.order.findMany({ where: { organizationId: id }, orderBy: { createdAt: 'desc' }, take: 20, select: { id: true, number: true, createdAt: true, status: true, paymentStatus: true, paymentMethod: true, totalPaise: true, paymentDueAt: true } }),
-      prisma.order.aggregate({ where: { organizationId: id, paymentStatus: { in: PAID }, demo: false }, _sum: { totalPaise: true }, _count: { _all: true } }),
+      prisma.order.aggregate({ where: { organizationId: id, paymentStatus: { in: PAID } }, _sum: { totalPaise: true }, _count: { _all: true } }),
       prisma.rfq.findMany({ where: { organizationId: id }, orderBy: { createdAt: 'desc' }, take: 10, select: { id: true, number: true, title: true, status: true, createdAt: true } }),
       prisma.purchaseOrder.findMany({ where: { organizationId: id }, orderBy: { createdAt: 'desc' }, take: 10, select: { id: true, number: true, status: true, totalPaise: true, paymentTerms: true, createdAt: true } }),
       creditOutstanding(prisma, id),
@@ -324,7 +323,7 @@ export function registerAdminPeople(app, { prisma }) {
       prisma.sellerStore.findMany({ where, orderBy: p.orderBy, skip: p.skip, take: p.take, include: { primaryCategory: true, payoutAccount: true, members: { include: { user: { select: { name: true, email: true } } } }, _count: { select: { listings: true, sellerOrders: true } } } }),
       prisma.sellerStore.count({ where }),
     ]);
-    const balances = finance && rows.length ? await prisma.settlementEntry.groupBy({ by: ['storeId'], where: { demo: false, storeId: { in: rows.map((r) => r.id) } }, _sum: { amountPaise: true } }) : [];
+    const balances = finance && rows.length ? await prisma.settlementEntry.groupBy({ by: ['storeId'], where: { storeId: { in: rows.map((r) => r.id) } }, _sum: { amountPaise: true } }) : [];
     const sellers = rows.map((s) => ({
       id: s.id, slug: s.slug, name: s.name, legalName: s.legalName, status: s.status, gstRegistered: s.gstRegistered, gstin: s.gstin, pan: s.pan, businessType: s.businessType,
       contactPhone: s.contactPhone, pickupAddress: s.pickupAddress, primaryCategory: s.primaryCategory?.name, createdAt: s.createdAt, description: s.description,
@@ -352,13 +351,13 @@ export function registerAdminPeople(app, { prisma }) {
       prisma.$queryRaw`SELECT AVG(r.rating)::float AS average, COUNT(*)::int AS count FROM reviews r JOIN order_items oi ON oi.id = r."orderItemId" JOIN seller_orders so ON so.id = oi."sellerOrderId" WHERE so."storeId" = ${id}::uuid`,
       prisma.sellerListing.groupBy({ by: ['status'], where: { storeId: id }, _count: { _all: true } }),
       prisma.sellerOrder.findMany({ where: { storeId: id, order: { status: { not: 'AWAITING_PAYMENT' } } }, orderBy: { createdAt: 'desc' }, take: 15, include: { order: { select: { id: true, number: true, paymentMethod: true } } } }),
-      finance ? prisma.settlementEntry.groupBy({ by: ['kind', 'demo'], where: { storeId: id }, _sum: { amountPaise: true } }) : [],
+      finance ? prisma.settlementEntry.groupBy({ by: ['kind'], where: { storeId: id }, _sum: { amountPaise: true } }) : [],
       finance ? prisma.payoutRecord.findMany({ where: { storeId: id }, orderBy: { createdAt: 'desc' }, take: 10 }) : [],
       prisma.auditLog.findMany({ where: { entityType: 'store', entityId: id }, orderBy: { createdAt: 'desc' }, take: 30 }),
     ]);
     const parcels = parcelStats.reduce((t, x) => t + x._count._all, 0);
     const count = (st) => parcelStats.find((x) => x.status === st)?._count._all ?? 0;
-    const real = (k) => m(sums.find((x) => x.kind === k && !x.demo)?._sum.amountPaise ?? 0);
+    const real = (k) => m(sums.find((x) => x.kind === k)?._sum.amountPaise ?? 0);
     const { members, payoutAccount, primaryCategory, ...store } = s;
     res.json({
       seller: { ...store, primaryCategory: primaryCategory?.name ?? null, payoutAccount: payoutAccount ? { accountHolder: payoutAccount.accountHolder, accountLast4: payoutAccount.accountLast4, ifsc: payoutAccount.ifsc, bankName: payoutAccount.bankName, verified: payoutAccount.verified } : null },
@@ -371,7 +370,7 @@ export function registerAdminPeople(app, { prisma }) {
       },
       money: finance ? {
         salesPaise: real('SALE'), shippingPaise: real('SHIPPING_FEE'), commissionPaise: -(real('COMMISSION') + real('COMMISSION_REVERSAL')), refundsPaise: -real('REFUND_ADJUSTMENT'),
-        paidOutPaise: -real('PAYOUT'), payablePaise: sums.filter((x) => !x.demo).reduce((t, x) => t + m(x._sum.amountPaise ?? 0), 0),
+        paidOutPaise: -real('PAYOUT'), payablePaise: sums.reduce((t, x) => t + m(x._sum.amountPaise ?? 0), 0),
         payouts: payouts.map((x) => ({ ...x, amountPaise: m(x.amountPaise) })),
       } : null,
       recentParcels: recent.map((x) => ({ id: x.id, orderId: x.order.id, orderNumber: x.order.number, status: x.status, totalPaise: m(x.totalPaise), paymentMethod: x.order.paymentMethod, createdAt: x.createdAt })),

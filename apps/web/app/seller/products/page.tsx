@@ -106,7 +106,7 @@ function Products() {
               <div className="flex-1 min-w-[220px]">
                 <p className="font-semibold">{l.name}{l.variantLabel !== 'Standard' && <span className="text-muted font-normal"> · {l.variantLabel}</span>}</p>
                 <p className="text-xs text-muted">SKU {l.sku} · {l.brand}{!l.ownsProduct && ' · your offer on a shared product page'}</p>
-                <div className="flex flex-wrap gap-1.5 mt-1.5"><StatusBadge status={l.status} />{l.productStatus !== 'APPROVED' && l.ownsProduct && <Badge tone="warning">Product page {label(l.productStatus).toLowerCase()}</Badge>}{l.promotion && <Badge tone="danger">In deal: {l.promotion.name}</Badge>}{l.demo && <Badge tone="gold">Demo</Badge>}</div>
+                <div className="flex flex-wrap gap-1.5 mt-1.5"><StatusBadge status={l.status} />{l.productStatus !== 'APPROVED' && l.ownsProduct && <Badge tone="warning">Product page {label(l.productStatus).toLowerCase()}</Badge>}{l.promotion && <Badge tone="danger">In deal: {l.promotion.name}</Badge>}</div>
                 {l.moderationNote && <p className="text-sm text-warning mt-1.5">Reviewer: {l.moderationNote}</p>}
               </div>
               <div className="text-sm min-w-[120px]"><p className="price">{formatMoney(l.pricePaise)}</p><p className="mrp text-xs">{formatMoney(l.mrpPaise)}</p></div>

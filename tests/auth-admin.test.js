@@ -152,7 +152,7 @@ describe('Staff permissions', () => {
     expect((await ctx.agent().post('/api/auth/login').send({ email: victim.email, password: 'Correct horse battery 9' })).status).toBe(403);
   });
 
-  it('dashboard numbers are calculated, and demo money is kept apart from real GMV', async () => {
+  it('dashboard numbers are calculated from stored orders', async () => {
     const res = await admin.agent.get('/api/admin/dashboard');
     expect(res.status).toBe(200);
     expect(res.body.metrics.paidGmvPaise).toBe(0);

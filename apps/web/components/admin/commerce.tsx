@@ -29,7 +29,7 @@ type Order360 = {
 };
 
 export function Orders({ can }: { can: Can }) {
-  const list = useAdminTable<ListResponse & { orders: OrderRow[]; totalValuePaise: number }>('/admin/orders', ['status', 'payment', 'method', 'mode', 'store', 'user', 'organization', 'demo', 'coupon', 'min', 'max']);
+  const list = useAdminTable<ListResponse & { orders: OrderRow[]; totalValuePaise: number }>('/admin/orders', ['status', 'payment', 'method', 'mode', 'store', 'user', 'organization', 'coupon', 'min', 'max']);
   const { get, set } = useUrlState();
   const [open, setOpen] = useOpenParam();
   const scoped = get('user') || get('store') || get('organization');
@@ -41,7 +41,7 @@ export function Orders({ can }: { can: Can }) {
     { key: 'payment', label: 'Payment', render: (o) => <><StatusBadge status={o.paymentStatus} text={PAYMENT_TEXT[o.paymentStatus]} /><span className="block text-xs text-muted mt-0.5">{label(o.paymentMethod)}</span></> },
     { key: 'coupon', label: 'Coupon', hidden: true, render: (o) => o.couponCode ?? '—' },
     { key: 'state', label: 'State', hidden: true, render: (o) => o.state ?? '—' },
-    { key: 'status', label: 'Status', render: (o) => <><StatusBadge status={o.status} text={ORDER_STATUS_TEXT[o.status]} />{o.demo && <Badge tone="gold" className="ml-1">Demo</Badge>}</> },
+    { key: 'status', label: 'Status', render: (o) => <><StatusBadge status={o.status} text={ORDER_STATUS_TEXT[o.status]} /></> },
     { key: 'total', label: 'Total', sort: 'total', className: 'text-right', render: (o) => <span className="font-semibold">{formatMoney(o.totalPaise)}</span> },
   ];
   return (
@@ -62,7 +62,6 @@ export function Orders({ can }: { can: Can }) {
           { key: 'payment', label: 'Payment', options: Object.entries(PAYMENT_TEXT) },
           { key: 'method', label: 'Method', options: METHODS },
           { key: 'mode', label: 'Channel', options: [['RETAIL', 'B2C retail'], ['BUSINESS', 'B2B business']] },
-          { key: 'demo', label: 'Data', options: [['no', 'Real only'], ['yes', 'Demo only']] },
         ]}
         toolbar={<AmountFilter />}
         summary={list.data && <p className="text-sm text-muted mb-3">Value of the {list.data.total.toLocaleString('en-IN')} orders shown: <strong className="text-ink">{formatMoney(list.data.totalValuePaise)}</strong></p>}
@@ -95,7 +94,7 @@ function OrderDrawer({ id, can, onClose }: { id: string; can: Can; onClose: () =
   const done = () => refetch();
   return (
     <Drawer open onClose={onClose} wide title={o ? `Order ${o.number}` : 'Loading…'} subtitle={o ? `Placed ${formatDateTime(o.createdAt)} · ${o.mode === 'BUSINESS' ? 'Business order' : 'Retail order'}` : undefined}
-      badges={o && <><StatusBadge status={o.status} text={ORDER_STATUS_TEXT[o.status]} /><StatusBadge status={o.paymentStatus} text={PAYMENT_TEXT[o.paymentStatus]} /><Badge tone="neutral">{label(o.paymentMethod)}</Badge>{o.demo && <Badge tone="gold">Demo</Badge>}{o.couponCode && <Badge tone="info">Coupon {o.couponCode}</Badge>}</>}
+      badges={o && <><StatusBadge status={o.status} text={ORDER_STATUS_TEXT[o.status]} /><StatusBadge status={o.paymentStatus} text={PAYMENT_TEXT[o.paymentStatus]} /><Badge tone="neutral">{label(o.paymentMethod)}</Badge>{o.couponCode && <Badge tone="info">Coupon {o.couponCode}</Badge>}</>}
       actions={data && o && <>
         {manage && <ActionButton label="Message customer" title="Message the customer" body="Sent to their notifications and by email." reason={false} confirmLabel="Send" fields={(st, set) => <>
           <Field label="Subject"><Input value={st.subject ?? ''} onChange={(e) => set({ subject: e.target.value })} placeholder="Delivery update" /></Field>
@@ -231,7 +230,7 @@ export function Refunds({ can }: { can: Can }) {
   return (
     <Section title="Refunds" description="Refunds come from approved returns, seller cancellations and staff refunds. Issue them through Razorpay, or record a bank transfer (needed for cash-on-delivery orders).">
       <DataTable tableId="refunds" query={list} rows={list.data?.refunds} columns={columns} search="Order, reason or reference"
-        filters={[{ key: 'status', label: 'Status', options: [['PENDING_PROVIDER', 'To pay'], ['PROCESSED', 'Processed'], ['DEMO_SIMULATED', 'Demo'], ['FAILED', 'Failed']] }]}
+        filters={[{ key: 'status', label: 'Status', options: [['PENDING_PROVIDER', 'To pay'], ['PROCESSED', 'Processed'], ['FAILED', 'Failed']] }]}
         summary={list.data && <p className="text-sm text-muted mb-3">Total of the refunds shown: <strong className="text-ink">{formatMoney(list.data.totalValuePaise)}</strong></p>} />
       <Modal open={!!manual} onOpenChange={(o) => !o && setManual(null)} title="Record a refund made outside IBazzzar" description="Enter the Razorpay refund ID or bank UTR. IBazzzar does not move money here.">
         {manual && <div className="grid gap-3"><Field label="Refund ID or UTR"><Input value={manual.ref} onChange={(e) => setManual({ ...manual, ref: e.target.value })} /></Field><Button onClick={() => process(manual.id, 'MANUAL', manual.ref)}>Record refund</Button></div>}
@@ -240,7 +239,7 @@ export function Refunds({ can }: { can: Can }) {
   );
 }
 
-type FinanceData = { balances: { storeId: string; seller: string; payoutHold: boolean; payoutHoldReason: string | null; commissionBps: number | null; payoutAccount: { accountLast4: string; ifsc: string; verified: boolean } | null; salesPaise: number; shippingPaise: number; commissionPaise: number; refundsPaise: number; paidOutPaise: number; payablePaise: number; demoPaise: number }[]; ledger: { id: string; storeId: string; seller: string; kind: string; amountPaise: number; note: string | null; demo: boolean; createdAt: string }[]; payouts: { id: string; seller: string; amountPaise: number; providerRef: string; createdAt: string }[] };
+type FinanceData = { balances: { storeId: string; seller: string; payoutHold: boolean; payoutHoldReason: string | null; commissionBps: number | null; payoutAccount: { accountLast4: string; ifsc: string; verified: boolean } | null; salesPaise: number; shippingPaise: number; commissionPaise: number; refundsPaise: number; paidOutPaise: number; payablePaise: number }[]; ledger: { id: string; storeId: string; seller: string; kind: string; amountPaise: number; note: string | null; demo: boolean; createdAt: string }[]; payouts: { id: string; seller: string; amountPaise: number; providerRef: string; createdAt: string }[] };
 export function Finance({ can }: { can: Can }) {
   const { get, set } = useUrlState();
   const store = get('store');
@@ -254,14 +253,14 @@ export function Finance({ can }: { can: Can }) {
         <div className="grid gap-6">
           <Table head={['Seller', 'Sales + delivery', 'Commission', 'Refunds', 'Paid out', 'Payable', '']} empty={!d.balances.length}>
             {d.balances.map((b) => <tr key={b.storeId} className={b.payoutHold ? 'bg-danger-bg/40' : undefined}>
-              <td><Link href={`/admin/sellers?open=${b.storeId}`} className="font-semibold hover:underline">{b.seller}</Link><span className="block text-xs text-muted">{b.payoutAccount ? `••••${b.payoutAccount.accountLast4} ${b.payoutAccount.verified ? '· verified' : '· unverified'}` : 'No bank account'}{b.commissionBps != null ? ` · ${pct(b.commissionBps)} commission` : ''}{b.demoPaise ? ` · demo ${formatMoney(b.demoPaise)}` : ''}</span>{b.payoutHold && <Badge tone="danger" className="mt-1">On hold: {b.payoutHoldReason}</Badge>}</td>
+              <td><Link href={`/admin/sellers?open=${b.storeId}`} className="font-semibold hover:underline">{b.seller}</Link><span className="block text-xs text-muted">{b.payoutAccount ? `••••${b.payoutAccount.accountLast4} ${b.payoutAccount.verified ? '· verified' : '· unverified'}` : 'No bank account'}{b.commissionBps != null ? ` · ${pct(b.commissionBps)} commission` : ''}</span>{b.payoutHold && <Badge tone="danger" className="mt-1">On hold: {b.payoutHoldReason}</Badge>}</td>
               <td>{formatMoney(b.salesPaise + b.shippingPaise)}</td><td>{formatMoney(b.commissionPaise)}</td><td>{formatMoney(b.refundsPaise)}</td><td>{formatMoney(b.paidOutPaise)}</td><td className="font-bold">{formatMoney(b.payablePaise)}</td>
               <td><span className="flex gap-1">{canManage && b.payablePaise >= 100 && <Button size="sm" variant="outline" disabled={!b.payoutAccount?.verified || b.payoutHold} title={b.payoutHold ? 'Release the hold first' : !b.payoutAccount?.verified ? 'Verify the bank account first' : undefined} onClick={() => setPayout({ storeId: b.storeId, seller: b.seller, max: b.payablePaise, amount: String(b.payablePaise / 100), ref: '' })}>Record payout</Button>}<Button size="sm" variant="ghost" onClick={() => set({ store: b.storeId })}>Ledger</Button></span></td>
             </tr>)}
           </Table>
           <section>
             <div className="flex items-center justify-between mb-2"><h2 className="text-lg">Ledger{store ? ` · ${d.balances.find((b) => b.storeId === store)?.seller ?? 'one seller'}` : ''}</h2>{store && <Button size="sm" variant="ghost" onClick={() => set({ store: null })}>Show all sellers</Button>}</div>
-            <Table head={['Date', 'Seller', 'Entry', 'Amount']} empty={!d.ledger.length}>{d.ledger.map((e) => <tr key={e.id}><td>{formatDate(e.createdAt)}</td><td>{e.seller}</td><td>{label(e.kind)}{e.demo && <Badge tone="gold" className="ml-1">Demo</Badge>}<span className="block text-xs text-muted">{e.note}</span></td><td className={e.amountPaise < 0 ? 'text-danger' : 'text-success'}>{formatMoney(e.amountPaise)}</td></tr>)}</Table>
+            <Table head={['Date', 'Seller', 'Entry', 'Amount']} empty={!d.ledger.length}>{d.ledger.map((e) => <tr key={e.id}><td>{formatDate(e.createdAt)}</td><td>{e.seller}</td><td>{label(e.kind)}<span className="block text-xs text-muted">{e.note}</span></td><td className={e.amountPaise < 0 ? 'text-danger' : 'text-success'}>{formatMoney(e.amountPaise)}</td></tr>)}</Table>
           </section>
           {d.payouts.length > 0 && <section><h2 className="text-lg mb-2">Payouts</h2><Table head={['Date', 'Seller', 'Reference', 'Amount']}>{d.payouts.map((p) => <tr key={p.id}><td>{formatDate(p.createdAt)}</td><td>{p.seller}</td><td className="font-mono text-xs">{p.providerRef}</td><td className="font-semibold">{formatMoney(p.amountPaise)}</td></tr>)}</Table></section>}
         </div>

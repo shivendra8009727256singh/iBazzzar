@@ -38,15 +38,14 @@ export function registerAdminInsights(app, { prisma }) {
     const finance = req.can('finance.view');
     const since = new Date(Date.now() - 30 * DAY);
     const confirmed = { status: { notIn: ['AWAITING_PAYMENT', 'CANCELLED'] } };
-    const [orders, awaiting, toShip, customers, sellers, gmv, demoGmv, commission, refundsPending, queues, series, statusMix, recent, top, rfqs, lowStock] = await Promise.all([
+    const [orders, awaiting, toShip, customers, sellers, gmv, commission, refundsPending, queues, series, statusMix, recent, top, rfqs, lowStock] = await Promise.all([
       prisma.order.count(),
       prisma.order.count({ where: { status: 'AWAITING_PAYMENT' } }),
       prisma.sellerOrder.count({ where: { status: { in: ['PENDING', 'PACKED'] }, order: confirmed } }),
       prisma.user.count({ where: { roles: { none: {} } } }),
       prisma.sellerStore.count({ where: { status: 'APPROVED' } }),
-      prisma.order.aggregate({ where: { ...confirmed, paymentStatus: { in: ['PAID', 'COD_COLLECTED', 'ON_TERMS', 'PARTIALLY_REFUNDED'] }, demo: false }, _sum: { totalPaise: true }, _count: { _all: true } }),
-      prisma.order.aggregate({ where: { paymentStatus: 'DEMO_SIMULATED' }, _sum: { totalPaise: true } }),
-      prisma.settlementEntry.aggregate({ where: { kind: { in: ['COMMISSION', 'COMMISSION_REVERSAL'] }, demo: false }, _sum: { amountPaise: true } }),
+      prisma.order.aggregate({ where: { ...confirmed, paymentStatus: { in: ['PAID', 'DEMO_SIMULATED', 'COD_COLLECTED', 'ON_TERMS', 'PARTIALLY_REFUNDED'] } }, _sum: { totalPaise: true }, _count: { _all: true } }),
+      prisma.settlementEntry.aggregate({ where: { kind: { in: ['COMMISSION', 'COMMISSION_REVERSAL'] } }, _sum: { amountPaise: true } }),
       prisma.refund.aggregate({ where: { status: 'PENDING_PROVIDER' }, _sum: { amountPaise: true }, _count: { _all: true } }),
       Promise.all([
         prisma.sellerStore.count({ where: { status: 'PENDING' } }),
@@ -58,12 +57,12 @@ export function registerAdminInsights(app, { prisma }) {
         prisma.order.count({ where: { paymentStatus: 'BANK_TRANSFER_PENDING', status: 'AWAITING_PAYMENT' } }),
       ]),
       prisma.$queryRaw`SELECT to_char(date_trunc('day', "createdAt" AT TIME ZONE 'Asia/Kolkata'), 'YYYY-MM-DD') AS day, COUNT(*)::int AS orders,
-        COALESCE(SUM(CASE WHEN "paymentStatus" IN ('PAID','COD_COLLECTED','ON_TERMS','PARTIALLY_REFUNDED') AND NOT demo THEN "totalPaise" ELSE 0 END), 0)::bigint AS gmv
+        COALESCE(SUM(CASE WHEN "paymentStatus" IN ('PAID','DEMO_SIMULATED','COD_COLLECTED','ON_TERMS','PARTIALLY_REFUNDED') THEN "totalPaise" ELSE 0 END), 0)::bigint AS gmv
         FROM orders WHERE "createdAt" >= ${since} GROUP BY 1 ORDER BY 1`,
       prisma.order.groupBy({ by: ['status'], _count: { _all: true } }),
       prisma.order.findMany({ orderBy: { createdAt: 'desc' }, take: 8, include: { user: { select: { name: true } } } }),
       prisma.$queryRaw`SELECT s.id, s.name, COALESCE(SUM(e."amountPaise"), 0)::bigint AS gross FROM settlement_entries e JOIN seller_stores s ON s.id = e."storeId"
-        WHERE e.kind = 'SALE' AND NOT e.demo GROUP BY s.id, s.name ORDER BY gross DESC LIMIT 5`,
+        WHERE e.kind = 'SALE' GROUP BY s.id, s.name ORDER BY gross DESC LIMIT 5`,
       prisma.rfq.count({ where: { status: { in: ['OPEN', 'QUOTED'] } } }),
       getSetting(prisma, 'platform').then(({ lowStockThreshold }) => prisma.$queryRaw`SELECT COUNT(*)::int AS c FROM inventory_balances b JOIN seller_listings l ON l.id = b."listingId" WHERE l.status = 'APPROVED' AND b."onHand" - b.reserved <= ${lowStockThreshold}`),
     ]);
@@ -74,7 +73,6 @@ export function registerAdminInsights(app, { prisma }) {
         paidGmvPaise: finance ? m(gmv._sum.totalPaise ?? 0) : null,
         averageOrderPaise: finance && gmv._count._all ? Math.round(m(gmv._sum.totalPaise) / gmv._count._all) : null,
         platformRevenuePaise: finance ? -m(commission._sum.amountPaise ?? 0) : null,
-        demoGmvPaise: finance ? m(demoGmv._sum.totalPaise ?? 0) : null,
         refundsPendingPaise: finance ? m(refundsPending._sum.amountPaise ?? 0) : null,
         refundsPending: refundsPending._count._all,
         conversion: null, // needs storefront visit tracking; never estimated
@@ -99,15 +97,13 @@ export function registerAdminInsights(app, { prisma }) {
     const yesterdayStart = new Date(todayStart.getTime() - DAY);
     const d30 = new Date(now - 30 * DAY);
     const d60 = new Date(now - 60 * DAY);
-    // Placed = real orders the customer committed to (paid, COD or credit), not cancelled.
-    const placed = Prisma.sql`NOT o.demo AND o."paymentStatus" NOT IN ('UNPAID','BANK_TRANSFER_PENDING','DEMO_SIMULATED') AND o.status <> 'CANCELLED'`;
+    // Placed = orders the customer committed to (paid, COD or credit), not cancelled.
+    const placed = Prisma.sql`o."paymentStatus" NOT IN ('UNPAID','BANK_TRANSFER_PENDING') AND o.status <> 'CANCELLED'`;
     const window = (from, to) => prisma.$queryRaw`SELECT
         COUNT(*) FILTER (WHERE ${placed})::int AS orders,
         COALESCE(SUM(o."totalPaise") FILTER (WHERE ${placed}), 0)::bigint AS gmv,
         COUNT(DISTINCT o."userId") FILTER (WHERE ${placed})::int AS buyers,
-        COUNT(*) FILTER (WHERE o.demo AND o.status <> 'CANCELLED')::int AS "demoOrders",
-        COALESCE(SUM(o."totalPaise") FILTER (WHERE o.demo AND o.status <> 'CANCELLED'), 0)::bigint AS "demoGmv",
-        COUNT(*) FILTER (WHERE NOT o.demo AND o."paymentStatus" IN ('UNPAID','BANK_TRANSFER_PENDING') AND o.status <> 'CANCELLED')::int AS awaiting
+        COUNT(*) FILTER (WHERE o."paymentStatus" IN ('UNPAID','BANK_TRANSFER_PENDING') AND o.status <> 'CANCELLED')::int AS awaiting
         FROM orders o WHERE o."createdAt" >= ${from} AND o."createdAt" < ${to}`;
     const { lowStockThreshold } = await getSetting(prisma, 'platform');
     const [[today], [yesterday], [last30], [prev30], pipeline, topProducts, topCategories, paymentMix, lowStock, newUsers, reviews, rating, b2b, liveProducts, activity] = await Promise.all([
@@ -128,7 +124,7 @@ export function registerAdminInsights(app, { prisma }) {
       prisma.$queryRaw`SELECT l.id, cp.id AS "productId", cp.name, v.label AS variant, s.name AS seller, (b."onHand" - b.reserved)::int AS available
         FROM seller_listings l JOIN inventory_balances b ON b."listingId" = l.id JOIN product_variants v ON v.id = l."variantId" JOIN catalog_products cp ON cp.id = v."catalogProductId" JOIN seller_stores s ON s.id = l."storeId"
         WHERE l.status = 'APPROVED' AND b."onHand" - b.reserved <= ${lowStockThreshold} ORDER BY available ASC LIMIT 5`,
-      req.can('users.view') ? prisma.user.findMany({ where: { demo: false, roles: { none: {} } }, orderBy: { createdAt: 'desc' }, take: 5, select: { id: true, name: true, email: true, createdAt: true, _count: { select: { orders: true } } } }) : [],
+      req.can('users.view') ? prisma.user.findMany({ where: { roles: { none: {} } }, orderBy: { createdAt: 'desc' }, take: 5, select: { id: true, name: true, email: true, createdAt: true, _count: { select: { orders: true } } } }) : [],
       prisma.review.findMany({ orderBy: { createdAt: 'desc' }, take: 4, select: { id: true, rating: true, title: true, authorName: true, createdAt: true, product: { select: { id: true, name: true } } } }),
       prisma.review.aggregate({ where: { status: 'PUBLISHED' }, _avg: { rating: true }, _count: { _all: true } }),
       req.can('b2b.view') ? Promise.all([
@@ -142,8 +138,8 @@ export function registerAdminInsights(app, { prisma }) {
     ]);
     const people = new Map((await prisma.user.findMany({ where: { id: { in: [...new Set(activity.map((a) => a.actorId).filter((x) => /^[0-9a-f-]{36}$/.test(x ?? '')))] } }, select: { id: true, name: true } })).map((u) => [u.id, u.name]));
     const money = (v) => (finance ? n(v) : null);
-    // orders/gmv = real committed orders; demoOrders and awaiting are shown beside them so nothing is silently hidden.
-    const w = (x) => ({ orders: x.orders, buyers: x.buyers, gmvPaise: money(x.gmv), demoOrders: x.demoOrders, demoGmvPaise: money(x.demoGmv), awaitingPayment: x.awaiting });
+    // orders/gmv = committed orders; orders still awaiting payment are shown beside them so nothing is silently hidden.
+    const w = (x) => ({ orders: x.orders, buyers: x.buyers, gmvPaise: money(x.gmv), awaitingPayment: x.awaiting });
     res.json({
       today: w(today), yesterday: w(yesterday), last30: w(last30), prev30: w(prev30),
       pipeline: pipeline[0],
@@ -161,7 +157,7 @@ export function registerAdminInsights(app, { prisma }) {
 
   // ───────────── Summary cards (counts by status, new in the last 7 days, 14-day trend) ─────────────
   const SUMMARIES = {
-    users: { cap: 'users.view', table: 'users', where: Prisma.sql`NOT demo`, statuses: {
+    users: { cap: 'users.view', table: 'users', where: Prisma.sql`TRUE`, statuses: {
       ACTIVE: Prisma.sql`status = 'ACTIVE'`, UNCONFIRMED: Prisma.sql`"emailVerifiedAt" IS NULL AND status = 'ACTIVE'`, LOCKED: Prisma.sql`"lockedUntil" > now()`, SUSPENDED: Prisma.sql`status = 'SUSPENDED'`,
     } },
     sellers: { cap: 'users.view', table: 'seller_stores', where: Prisma.sql`TRUE`, statuses: Object.fromEntries(['PENDING', 'APPROVED', 'REJECTED', 'SUSPENDED'].map((s) => [s, Prisma.sql`status::text = ${s}`])) },
@@ -193,7 +189,7 @@ export function registerAdminInsights(app, { prisma }) {
         COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM seller_members m WHERE m."userId" = u.id))::int AS seller,
         COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM user_roles r WHERE r."userId" = u.id))::int AS staff,
         COUNT(*) FILTER (WHERE u."passwordHash" = 'guest$unset')::int AS guest
-        FROM users u WHERE NOT u.demo`;
+        FROM users u`;
       out.types = t;
     }
     res.json(out);
@@ -263,9 +259,9 @@ export function registerAdminInsights(app, { prisma }) {
   // ───────────── Analytics ─────────────
   async function analytics(w, { finance }) {
     const modeSql = w.mode ? Prisma.sql`AND o.mode::text = ${w.mode}` : Prisma.empty;
-    // "Placed" = a real order the customer committed to: paid, COD, or on credit terms. Demo and never-paid orders are excluded.
-    const placed = (from, to) => Prisma.sql`NOT o.demo AND o."paymentStatus" NOT IN ('UNPAID','BANK_TRANSFER_PENDING','DEMO_SIMULATED') AND o."createdAt" >= ${from} AND o."createdAt" < ${to} ${modeSql}`;
-    const everPlaced = Prisma.sql`NOT o.demo AND o."paymentStatus" NOT IN ('UNPAID','BANK_TRANSFER_PENDING','DEMO_SIMULATED') AND o.status <> 'CANCELLED' ${modeSql}`;
+    // "Placed" = an order the customer committed to: paid, COD, or on credit terms. Never-paid orders are excluded.
+    const placed = (from, to) => Prisma.sql`o."paymentStatus" NOT IN ('UNPAID','BANK_TRANSFER_PENDING') AND o."createdAt" >= ${from} AND o."createdAt" < ${to} ${modeSql}`;
+    const everPlaced = Prisma.sql`o."paymentStatus" NOT IN ('UNPAID','BANK_TRANSFER_PENDING') AND o.status <> 'CANCELLED' ${modeSql}`;
 
     async function summary(from, to) {
       const [[a], [b], [c], [d], [r], [cm], [nc]] = await Promise.all([
@@ -277,9 +273,9 @@ export function registerAdminInsights(app, { prisma }) {
         prisma.$queryRaw`SELECT COALESCE(SUM(oi.quantity), 0)::int AS units FROM order_items oi JOIN seller_orders so ON so.id = oi."sellerOrderId" JOIN orders o ON o.id = oi."orderId"
           WHERE ${placed(from, to)} AND so.status <> 'CANCELLED'`,
         prisma.$queryRaw`SELECT COALESCE(SUM(o."discountPaise"), 0)::bigint AS discount, COALESCE(SUM(o."taxPaise"), 0)::bigint AS tax FROM orders o WHERE ${placed(from, to)} AND o.status <> 'CANCELLED'`,
-        prisma.$queryRaw`SELECT COUNT(*)::int AS returns FROM returns r JOIN orders o ON o.id = r."orderId" WHERE NOT o.demo AND r."createdAt" >= ${from} AND r."createdAt" < ${to} ${modeSql}`,
-        prisma.$queryRaw`SELECT COALESCE(SUM(rf."amountPaise"), 0)::bigint AS refunds, COUNT(*)::int AS count FROM refunds rf JOIN orders o ON o.id = rf."orderId" WHERE rf.status <> 'DEMO_SIMULATED' AND NOT o.demo AND rf."createdAt" >= ${from} AND rf."createdAt" < ${to} ${modeSql}`,
-        prisma.$queryRaw`SELECT COALESCE(-SUM(e."amountPaise"), 0)::bigint AS commission FROM settlement_entries e JOIN orders o ON o.id = e."orderId" WHERE e.kind IN ('COMMISSION','COMMISSION_REVERSAL') AND NOT e.demo AND e."createdAt" >= ${from} AND e."createdAt" < ${to} ${modeSql}`,
+        prisma.$queryRaw`SELECT COUNT(*)::int AS returns FROM returns r JOIN orders o ON o.id = r."orderId" WHERE r."createdAt" >= ${from} AND r."createdAt" < ${to} ${modeSql}`,
+        prisma.$queryRaw`SELECT COALESCE(SUM(rf."amountPaise"), 0)::bigint AS refunds, COUNT(*)::int AS count FROM refunds rf JOIN orders o ON o.id = rf."orderId" WHERE rf."createdAt" >= ${from} AND rf."createdAt" < ${to} ${modeSql}`,
+        prisma.$queryRaw`SELECT COALESCE(-SUM(e."amountPaise"), 0)::bigint AS commission FROM settlement_entries e JOIN orders o ON o.id = e."orderId" WHERE e.kind IN ('COMMISSION','COMMISSION_REVERSAL') AND e."createdAt" >= ${from} AND e."createdAt" < ${to} ${modeSql}`,
         prisma.$queryRaw`SELECT COUNT(*)::int AS c FROM (SELECT o."userId", MIN(o."createdAt") AS first FROM orders o WHERE ${everPlaced} GROUP BY o."userId") t WHERE t.first >= ${from} AND t.first < ${to}`,
       ]);
       const orders = a.orders; const gmv = n(a.gmv);
@@ -320,7 +316,7 @@ export function registerAdminInsights(app, { prisma }) {
       prisma.$queryRaw`SELECT oi."catalogProductId" AS id, MAX(oi.name) AS name, COALESCE(SUM(ri.quantity), 0)::int AS returned,
           (SELECT COALESCE(SUM(x.quantity), 0) FROM order_items x JOIN orders o ON o.id = x."orderId" WHERE x."catalogProductId" = oi."catalogProductId" AND ${P})::int AS sold
         FROM return_items ri JOIN returns r ON r.id = ri."returnId" JOIN order_items oi ON oi.id = ri."orderItemId" JOIN orders o2 ON o2.id = r."orderId"
-        WHERE r.status <> 'REJECTED' AND NOT o2.demo AND r."createdAt" >= ${w.from} AND r."createdAt" < ${w.to} GROUP BY 1 ORDER BY returned DESC LIMIT 15`,
+        WHERE r.status <> 'REJECTED' AND r."createdAt" >= ${w.from} AND r."createdAt" < ${w.to} GROUP BY 1 ORDER BY returned DESC LIMIT 15`,
       prisma.$queryRaw`SELECT l.id, l.sku, cp.id AS "productId", cp.name, v.label AS variant, s.name AS seller, (b."onHand" - b.reserved)::int AS available
         FROM seller_listings l JOIN inventory_balances b ON b."listingId" = l.id JOIN product_variants v ON v.id = l."variantId" JOIN catalog_products cp ON cp.id = v."catalogProductId" JOIN seller_stores s ON s.id = l."storeId"
         WHERE l.status = 'APPROVED' AND b."onHand" - b.reserved <= ${lowStockThreshold} ORDER BY available ASC, cp.name LIMIT 20`,
@@ -331,14 +327,14 @@ export function registerAdminInsights(app, { prisma }) {
       prisma.$queryRaw`SELECT u.id, u.name, u.email, COUNT(DISTINCT o.id)::int AS orders, COALESCE(SUM(so."totalPaise"), 0)::bigint AS gmv, MAX(o."createdAt") AS "lastOrderAt"
         FROM orders o JOIN seller_orders so ON so."orderId" = o.id JOIN users u ON u.id = o."userId" WHERE ${P} AND so.status <> 'CANCELLED' GROUP BY u.id, u.name, u.email ORDER BY gmv DESC LIMIT 15`,
       prisma.$queryRaw`SELECT o."paymentMethod"::text AS method, COUNT(*)::int AS orders, COALESCE(SUM(o."totalPaise"), 0)::bigint AS gmv FROM orders o WHERE ${P} AND o.status <> 'CANCELLED' GROUP BY 1 ORDER BY orders DESC`,
-      prisma.$queryRaw`SELECT pi.status::text AS status, COUNT(*)::int AS count FROM payment_intents pi JOIN orders o ON o.id = pi."orderId" WHERE NOT o.demo AND pi."createdAt" >= ${w.from} AND pi."createdAt" < ${w.to} ${modeSql} GROUP BY 1`,
+      prisma.$queryRaw`SELECT pi.status::text AS status, COUNT(*)::int AS count FROM payment_intents pi JOIN orders o ON o.id = pi."orderId" WHERE pi."createdAt" >= ${w.from} AND pi."createdAt" < ${w.to} ${modeSql} GROUP BY 1`,
       prisma.$queryRaw`SELECT COUNT(*) FILTER (WHERE o."paymentMethod" = 'ONLINE')::int AS online, COUNT(*) FILTER (WHERE o."paymentMethod" = 'ONLINE' AND o.status = 'CANCELLED' AND o."paymentStatus" = 'UNPAID')::int AS abandoned
-        FROM orders o WHERE NOT o.demo AND o."createdAt" >= ${w.from} AND o."createdAt" < ${w.to} ${modeSql}`,
+        FROM orders o WHERE o."createdAt" >= ${w.from} AND o."createdAt" < ${w.to} ${modeSql}`,
       finance ? prisma.$queryRaw`SELECT COALESCE(oi."hsnCode", 'Not set') AS hsn, oi."taxRateBps" AS "rateBps", COALESCE(SUM(oi.quantity), 0)::int AS quantity,
           COALESCE(SUM(oi."taxablePaise"), 0)::bigint AS taxable, COALESCE(SUM(oi."cgstPaise"), 0)::bigint AS cgst, COALESCE(SUM(oi."sgstPaise"), 0)::bigint AS sgst, COALESCE(SUM(oi."igstPaise"), 0)::bigint AS igst, COALESCE(SUM(oi."totalPaise"), 0)::bigint AS total
         FROM order_items oi JOIN orders o ON o.id = oi."orderId" JOIN seller_orders so ON so.id = oi."sellerOrderId" WHERE ${P} AND so.status <> 'CANCELLED' GROUP BY 1, 2 ORDER BY total DESC` : [],
       finance ? prisma.$queryRaw`SELECT s.id, s.name, e.kind::text AS kind, COALESCE(SUM(e."amountPaise"), 0)::bigint AS amount
-        FROM settlement_entries e JOIN seller_stores s ON s.id = e."storeId" WHERE NOT e.demo AND e."createdAt" >= ${w.from} AND e."createdAt" < ${w.to} GROUP BY 1, 2, 3` : [],
+        FROM settlement_entries e JOIN seller_stores s ON s.id = e."storeId" WHERE e."createdAt" >= ${w.from} AND e."createdAt" < ${w.to} GROUP BY 1, 2, 3` : [],
       w.mode === 'RETAIL' ? [] : prisma.$queryRaw`SELECT
           (SELECT COUNT(*) FROM rfqs r WHERE r."createdAt" >= ${w.from} AND r."createdAt" < ${w.to})::int AS rfqs,
           (SELECT COUNT(DISTINCT qr."rfqId") FROM quotation_requests qr JOIN quotations q ON q."requestId" = qr.id JOIN rfqs r ON r.id = qr."rfqId" WHERE q.status NOT IN ('REQUESTED') AND r."createdAt" >= ${w.from} AND r."createdAt" < ${w.to})::int AS quoted,
@@ -375,7 +371,7 @@ export function registerAdminInsights(app, { prisma }) {
 
     return {
       window: { from: w.fromDay, to: w.toDay, days: w.days, previousFrom: istDate(w.prevFrom), previousTo: istDate(new Date(w.prevTo.getTime() - 1)), mode: w.mode },
-      definitions: 'Placed orders only: paid online, cash on delivery or business credit terms. Demo data, unpaid and expired orders are excluded. Sales are parcel totals including GST and delivery, excluding cancelled parcels.',
+      definitions: 'Placed orders only: paid online, cash on delivery or business credit terms. Unpaid and expired orders are excluded. Sales are parcel totals including GST and delivery, excluding cancelled parcels.',
       summary: current, previous, change, series,
       modes: ['RETAIL', 'BUSINESS'].map((mode) => { const r = modes.find((x) => x.mode === mode); return { mode, orders: r?.orders ?? 0, gmvPaise: n(r?.gmv), customers: r?.customers ?? 0 }; }),
       categories: categories.map((c) => ({ name: c.name, gmvPaise: n(c.gmv), units: c.units, orders: c.orders })),
