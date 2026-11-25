@@ -1,12 +1,45 @@
+# Dependencies
 node_modules/
+
+# Build output and caches
 .next/
+out/
+dist/
+build/
+*.tsbuildinfo
+.turbo/
+.vercel/
+
+# Secrets — never upload. .env.example (no real values) stays tracked.
 .env
 .env.*
 !.env.example
+*.pem
+*.key
+*.p12
+
+# Local data: dev database, uploaded photos, storage
 .local/
+uploads/
+
+# Tests
 coverage/
 test-results/
 playwright-report/
-*.tsbuildinfo
-.superpowers/
+blob-report/
 
+# Logs
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# Tool-local settings
+.superpowers/
+.claude/settings.local.json
