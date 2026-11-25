@@ -13,7 +13,7 @@ build/
 # Secrets — never upload. .env.example (no real values) stays tracked.
 .env
 .env.*
-!.env.example
+.env.example
 *.pem
 *.key
 *.p12
