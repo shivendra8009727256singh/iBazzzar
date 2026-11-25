@@ -11,6 +11,7 @@ import type { Order, Parcel, PaymentInfo } from '@/lib/types';
 import { formatDate, formatDateTime, formatMoney, label, ORDER_STATUS_TEXT, PAYMENT_TEXT } from '@/lib/format';
 import { ParcelProgress } from '@/components/order-bits';
 import { BuyAgainButton } from '@/components/buy-again';
+import { ReviewComposer } from '@/components/reviews';
 import { payDemo, payOnline } from '@/components/pay';
 import { Alert, Badge, Button, ConfirmButton, Field, Modal, Spinner, StatusBadge, Textarea, useFormErrors } from '@/components/ui';
 
@@ -18,29 +19,10 @@ type Detail = { order: Order; payment: PaymentInfo; bankTransfer: { accountName:
 
 function ReviewDialog({ productId, name, onDone }: { productId: string; name: string; onDone: () => void }) {
   const [open, setOpen] = useState(false);
-  const [rating, setRating] = useState(5);
-  const [title, setTitle] = useState('');
-  const [body, setBody] = useState('');
-  const [busy, setBusy] = useState(false);
-  const errors = useFormErrors();
-  const submit = async () => {
-    setBusy(true); errors.clear();
-    try { await post(`/products/${productId}/reviews`, { rating, title, body }); toast.success('Thanks! Your review is live.'); setOpen(false); onDone(); } catch (e) { errors.set(e); } finally { setBusy(false); }
-  };
   return (
     <>
       <button onClick={() => setOpen(true)} className="link text-sm inline-flex items-center gap-1"><Star size={14} />Write a review</button>
-      <Modal open={open} onOpenChange={setOpen} title="Review your purchase" description={name}>
-        <div className="grid gap-4">
-          {errors.message && <Alert>{errors.message}</Alert>}
-          <div role="radiogroup" aria-label="Rating" className="flex gap-1">
-            {[1, 2, 3, 4, 5].map((n) => <button key={n} role="radio" aria-checked={rating === n} aria-label={`${n} stars`} onClick={() => setRating(n)}><Star size={30} className={n <= rating ? 'fill-gold text-gold' : 'text-line-strong'} /></button>)}
-          </div>
-          <Field label="Headline" error={errors.field('title')}><input className="input" value={title} onChange={(e) => setTitle(e.target.value)} /></Field>
-          <Field label="Your review" error={errors.field('body')}><Textarea rows={4} value={body} onChange={(e) => setBody(e.target.value)} /></Field>
-          <Button loading={busy} onClick={submit}>Publish review</Button>
-        </div>
-      </Modal>
+      {open && <ReviewComposer productId={productId} productName={name} open={open} onOpenChange={setOpen} onDone={onDone} />}
     </>
   );
 }

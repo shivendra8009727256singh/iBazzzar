@@ -4,12 +4,13 @@ import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ImagePlus, X, Search, Loader2 } from 'lucide-react';
-import { api, post, upload } from '@/lib/api';
+import { Search } from 'lucide-react';
+import { api, post } from '@/lib/api';
 import type { Category } from '@/lib/types';
 import { cn, rupeesToPaise } from '@/lib/format';
 import { Alert, Button, Field, Input, PageHeader, Select, Tabs, Textarea, useFormErrors } from '@/components/ui';
 import { TierEditor } from '@/components/tier-editor';
+import { ImageUploader } from '@/components/image-uploader';
 
 type Mode = 'new' | 'offer' | 'variant';
 type Pricing = { sku: string; price: string; mrp: string; stock: string; moq: string; pack: string; wholesale: boolean; cod: boolean; returnable: boolean; tiers: { min: string; price: string }[] };
@@ -41,37 +42,12 @@ function PricingFields({ value: p, onChange, err }: { value: Pricing; onChange: 
   );
 }
 
+/** Up to 4 product photos, like marketplace apps: a clear cover first, then back, side and a close-up. */
 function Photos({ images, onChange }: { images: string[]; onChange: (i: string[]) => void }) {
-  const [busy, setBusy] = useState(false);
-  const add = async (files: FileList | null) => {
-    if (!files) return;
-    setBusy(true);
-    const next = [...images];
-    for (const f of [...files].slice(0, 8 - images.length)) {
-      try { const r = await upload<{ media: { url: string } }>('/seller/media', f); next.push(r.media.url); } catch (e) { toast.error(`${f.name}: ${(e as Error).message}`); }
-    }
-    onChange(next); setBusy(false);
-  };
   return (
-    <div>
-      <p className="label mb-2">Photos <span className="text-danger">*</span></p>
-      <div className="flex flex-wrap gap-3">
-        {images.map((url, i) => (
-          <div key={url} className={cn('relative size-28 rounded-xl border bg-cream overflow-hidden', i === 0 ? 'border-gold ring-2 ring-gold/30' : 'border-line')}>
-            <Image src={url} alt={`Photo ${i + 1}`} fill sizes="112px" className="object-contain p-1" unoptimized />
-            {i === 0 && <span className="absolute bottom-1 left-1 badge badge-gold text-[10px]">Cover</span>}
-            <button type="button" aria-label={`Remove photo ${i + 1}`} onClick={() => onChange(images.filter((x) => x !== url))} className="absolute top-1 right-1 size-6 rounded-full bg-white shadow grid place-items-center"><X size={13} /></button>
-          </div>
-        ))}
-        {images.length < 8 && (
-          <label className="size-28 rounded-xl border-2 border-dashed border-line-strong grid place-items-center text-center text-xs text-muted cursor-pointer hover:border-forest">
-            {busy ? <Loader2 className="animate-spin" /> : <span><ImagePlus className="mx-auto mb-1" />Add photos</span>}
-            <input type="file" accept="image/jpeg,image/png,image/webp" multiple className="sr-only" onChange={(e) => add(e.target.files)} />
-          </label>
-        )}
-      </div>
-      <p className="hint mt-2">Your own genuine photos, at least 300 × 300 px, up to 5 MB each. JPEG, PNG or WebP. We strip hidden data and convert to WebP.</p>
-    </div>
+    <ImageUploader value={images} onChange={onChange} max={4} uploadPath="/seller/media" label="Product photos" required
+      slots={['Front (cover)', 'Back', 'Side', 'Close-up / detail']}
+      hint={<>Add up to <strong>4</strong> of your own photos. The first is the cover shown in search: product only, plain light background, filling most of the frame. At least 300 × 300 px (1000 × 1000 px looks best), up to 5 MB each, JPEG, PNG or WebP. We remove hidden data and convert to WebP.</>} />
   );
 }
 

@@ -110,7 +110,7 @@ export function Media() {
   const [owner, setOwner] = useState('');
   const list = useAdminList<{ media: { id: string; url: string; ownerType: string; seller: string | null; width: number | null; height: number | null; bytes: number; mime: string; createdAt: string; usedBy: { id: string; name: string }[] }[]; page: number; pages: number }>('/admin/media', 'media', { owner });
   return (
-    <Section title="Media library" description="Removing an image takes it off every product that used it and sends those products back to review." actions={<Select aria-label="Owner" className="min-h-[40px] py-1 w-auto" value={owner} onChange={(e) => setOwner(e.target.value)}><option value="">All</option><option value="SELLER">Seller photos</option><option value="PLATFORM">Platform artwork</option><option value="RFQ">RFQ attachments</option></Select>}>
+    <Section title="Media library" description="Removing an image takes it off every product or review that used it. Products go back to review; reviewers are told why." actions={<Select aria-label="Owner" className="min-h-[40px] py-1 w-auto" value={owner} onChange={(e) => setOwner(e.target.value)}><option value="">All</option><option value="SELLER">Seller photos</option><option value="PLATFORM">Platform artwork</option><option value="RFQ">RFQ attachments</option><option value="REVIEW">Review photos</option></Select>}>
       <Loadable query={list}>{(d) => (
         <>
           <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">

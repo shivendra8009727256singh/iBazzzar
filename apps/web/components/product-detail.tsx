@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import {
   Heart, Minus, Plus, Truck, RotateCcw, ShieldCheck, Store, BadgeCheck, Banknote, MapPin, Building2, ZoomIn, ShoppingCart, Zap, Tag, Star,
-  ChevronRight, Share2, Check, Award, Package,
+  ChevronRight, Share2, Award, Package,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
@@ -15,6 +15,7 @@ import { cn, formatMoney, formatDate, percentOff, pct } from '@/lib/format';
 import { useCart } from './providers';
 import { Badge, Button, Modal } from './ui';
 import { Countdown } from './home-parts';
+import { ProductReviews, useReviewPage } from './reviews';
 
 export type Detail = {
   product: {
@@ -117,47 +118,14 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 }
 
 // ───────────── Reviews ─────────────
-function Ratings({ data }: { data: Detail }) {
+/** "4.2★ 120 ratings & 120 reviews", read live so a new review counts at once (falls back to the page's figures). */
+function RatingLine({ data }: { data: Detail }) {
   const p = data.product;
-  const breakdown = p.ratingBreakdown ?? [5, 4, 3, 2, 1].map((stars) => ({ stars, count: data.reviews.filter((r) => r.rating === stars).length }));
-  const total = Math.max(1, breakdown.reduce((s, b) => s + b.count, 0));
-  const tone = (s: number) => (s >= 4 ? 'bg-success' : s === 3 ? 'bg-[#c27c0e]' : 'bg-danger');
-  return (
-    <section id="reviews" className="card p-5 md:p-6" aria-labelledby="reviews-title">
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
-        <h2 id="reviews-title" className="text-2xl">Ratings & reviews</h2>
-        <p className="text-sm text-muted flex items-center gap-1.5"><BadgeCheck size={15} className="text-forest" />Only customers who received this product can review it.</p>
-      </div>
-      {p.rating ? (
-        <div className="grid gap-8 md:grid-cols-[220px_1fr] items-center pb-6 border-b border-line">
-          <div className="text-center">
-            <p className="text-5xl font-bold flex items-center justify-center gap-1.5">{p.rating.average.toFixed(1)}<Star size={30} className="text-success" fill="currentColor" /></p>
-            <p className="text-sm text-muted mt-1">{p.rating.count.toLocaleString('en-IN')} verified rating{p.rating.count === 1 ? '' : 's'}</p>
-          </div>
-          <ul className="grid gap-2">
-            {breakdown.map((b) => (
-              <li key={b.stars} className="flex items-center gap-3 text-sm">
-                <span className="w-8 font-semibold flex items-center gap-0.5">{b.stars}<Star size={12} fill="currentColor" /></span>
-                <span className="flex-1 h-2 rounded-full bg-mint overflow-hidden"><span className={cn('block h-full rounded-full', tone(b.stars))} style={{ width: `${(b.count / total) * 100}%` }} /></span>
-                <span className="w-8 text-right text-muted tabular-nums">{b.count}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-      {data.reviews.length ? (
-        <div className="divide-y divide-line">
-          {data.reviews.map((r) => (
-            <article key={r.id} className="py-5">
-              <div className="flex items-center gap-2"><RatingPill value={r.rating} /><h3 className="font-sans font-semibold">{r.title}</h3></div>
-              <p className="text-[15px] text-[#33443a] mt-2 leading-relaxed">{r.body}</p>
-              <p className="text-xs text-muted mt-3 flex flex-wrap items-center gap-2"><span className="font-semibold text-ink">{r.authorName}</span><span className="inline-flex items-center gap-1 text-success"><Check size={13} />Verified buyer</span><span>· {formatDate(r.createdAt)}</span></p>
-            </article>
-          ))}
-        </div>
-      ) : <p className="text-muted py-6">No reviews yet. Bought this? You can review it from your order once it’s delivered.</p>}
-    </section>
-  );
+  const live = useReviewPage(p.id, { size: 5, sort: 'helpful' }).data?.summary;
+  const average = live?.average ?? p.rating?.average ?? null;
+  const count = live?.count ?? p.rating?.count ?? 0;
+  if (!count || average == null) return <a href="#reviews" className="text-sm text-muted hover:text-ink">Be the first to review</a>;
+  return <a href="#reviews" className="inline-flex items-center gap-2 text-sm text-muted hover:text-ink"><RatingPill value={average} />{count.toLocaleString('en-IN')} rating{count === 1 ? '' : 's'} & review{count === 1 ? '' : 's'}{live?.withPhotos ? ` · ${live.withPhotos} with photos` : ''}</a>;
 }
 
 // ───────────── Page ─────────────
@@ -237,7 +205,7 @@ export function ProductDetail({ data }: { data: Detail }) {
             <Link href={`/products?brand=${p.brand.slug}`} className="eyebrow hover:underline">{p.brand.name}</Link>
             <h1 className="text-[24px] md:text-[30px] leading-tight mt-1">{p.name}</h1>
             <div className="flex flex-wrap items-center gap-3 mt-2.5">
-              {p.rating ? <a href="#reviews" className="inline-flex items-center gap-2 text-sm text-muted hover:text-ink"><RatingPill value={p.rating.average} />{p.rating.count.toLocaleString('en-IN')} rating{p.rating.count === 1 ? '' : 's'} & {data.reviews.length} review{data.reviews.length === 1 ? '' : 's'}</a> : <span className="text-sm text-muted">Be the first to review</span>}
+              <RatingLine data={data} />
               <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-forest bg-mint rounded-full px-2 py-0.5"><Award size={13} />IBazzzar verified seller</span>
               {p.demo && <Badge tone="gold">Demonstration product</Badge>}
             </div>
@@ -381,7 +349,7 @@ export function ProductDetail({ data }: { data: Detail }) {
           </section>
         </div>
 
-        <div className="mt-5"><Ratings data={data} /></div>
+        <div className="mt-5"><ProductReviews productId={p.id} slug={p.slug} /></div>
 
         {data.related.length > 0 && (
           <section className="card p-5 md:p-6 mt-5" aria-labelledby="related">

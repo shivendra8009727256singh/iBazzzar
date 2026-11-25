@@ -105,7 +105,7 @@ export function registerAccount(app, { prisma, config }) {
       pending.push({ productId: d.catalogProductId, name: d.name, image: d.image, orderId: d.orderId, orderNumber: d.order.number, orderedAt: d.order.createdAt });
     }
     res.json({
-      reviews: reviews.map((r) => ({ id: r.id, rating: r.rating, title: r.title, body: r.body, status: r.status, createdAt: r.createdAt, product: { id: r.product.id, name: r.product.name, slug: r.product.slug, image: r.product.media[0]?.url ?? null } })),
+      reviews: reviews.map((r) => ({ id: r.id, rating: r.rating, title: r.title, body: r.body, images: r.images, helpfulCount: r.helpfulCount, status: r.status, createdAt: r.createdAt, product: { id: r.product.id, name: r.product.name, slug: r.product.slug, image: r.product.media[0]?.url ?? null } })),
       pending,
     });
   });

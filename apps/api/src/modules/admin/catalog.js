@@ -461,7 +461,7 @@ export function registerAdminCatalog(app, { prisma }) {
       prisma.review.findMany({ where, orderBy: p.orderBy, skip: p.skip, take: p.take, include: { product: { select: { id: true, name: true, slug: true } }, user: { select: { email: true } } } }),
       prisma.review.count({ where }),
     ]);
-    const reviews = rows.map((r) => ({ id: r.id, rating: r.rating, title: r.title, body: r.body, status: r.status, authorName: r.authorName, email: r.user.email, product: r.product, createdAt: r.createdAt }));
+    const reviews = rows.map((r) => ({ id: r.id, rating: r.rating, title: r.title, body: r.body, images: r.images, helpfulCount: r.helpfulCount, status: r.status, authorName: r.authorName, email: r.user.email, product: r.product, createdAt: r.createdAt }));
     sendList(res, p, { key: 'reviews', rows: reviews, total, filename: 'reviews', toCsvRow: (r) => ({ product: r.product.name, rating: r.rating, title: r.title, review: r.body, status: r.status, author: r.authorName, date: r.createdAt }) });
   });
   app.patch('/api/admin/reviews/:id', catalogue, async (req, res) => {

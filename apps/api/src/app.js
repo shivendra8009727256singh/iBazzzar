@@ -7,6 +7,7 @@ import { loadSession, originCheck, limiter, errorHandler } from './http/middlewa
 import { RedisRateStore } from './http/redis-rate-store.js';
 import { registerAuth } from './modules/auth.js';
 import { registerCatalog } from './modules/catalog.js';
+import { registerReviews } from './modules/reviews.js';
 import { registerCart } from './modules/cart.js';
 import { registerOrders } from './modules/orders.js';
 import { registerBusiness } from './modules/business.js';
@@ -73,6 +74,7 @@ export function createApp({ prisma, config, mailer, storage, payments, shipping,
   const ctx = { prisma, config, mailer, storage, payments, shipping, logger, limits };
   registerAuth(app, ctx);
   registerCatalog(app, ctx);
+  registerReviews(app, ctx);
   registerCart(app, ctx);
   registerOrders(app, ctx);
   registerBusiness(app, ctx);

@@ -3,55 +3,23 @@ import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { toast } from 'sonner';
 import { Star, MessageSquareHeart, EyeOff } from 'lucide-react';
-import { api, post } from '@/lib/api';
+import { api } from '@/lib/api';
 import { cn, formatDate } from '@/lib/format';
-import { Alert, Button, Empty, Field, Input, Modal, PageHeader, Skeleton, Textarea, useFormErrors } from '@/components/ui';
+import { Button, Empty, PageHeader, Skeleton } from '@/components/ui';
+import { ReviewComposer } from '@/components/reviews';
 
 type Data = {
-  reviews: { id: string; rating: number; title: string; body: string; status: string; createdAt: string; product: { id: string; name: string; slug: string; image: string | null } }[];
+  reviews: { id: string; rating: number; title: string; body: string; images: string[]; helpfulCount: number; status: string; createdAt: string; product: { id: string; name: string; slug: string; image: string | null } }[];
   pending: { productId: string; name: string; image: string | null; orderId: string; orderNumber: string; orderedAt: string }[];
 };
 
-function StarPicker({ value, onChange }: { value: number; onChange: (n: number) => void }) {
-  const [hover, setHover] = useState(0);
-  const words = ['', 'Poor', 'Fair', 'Good', 'Very good', 'Excellent'];
-  return (
-    <div className="flex items-center gap-3">
-      <div className="flex gap-1" role="radiogroup" aria-label="Rating" onMouseLeave={() => setHover(0)}>
-        {[1, 2, 3, 4, 5].map((n) => (
-          <button key={n} type="button" role="radio" aria-checked={value === n} aria-label={`${n} star${n === 1 ? '' : 's'}`} onMouseEnter={() => setHover(n)} onClick={() => onChange(n)} className="p-0.5">
-            <Star size={30} className={cn('transition', (hover || value) >= n ? 'text-gold fill-gold' : 'text-line-strong')} />
-          </button>
-        ))}
-      </div>
-      <span className="text-sm font-semibold text-muted">{words[hover || value]}</span>
-    </div>
-  );
-}
-
 function WriteReview({ item, onDone }: { item: Data['pending'][number]; onDone: () => void }) {
   const [open, setOpen] = useState(false);
-  const [f, setF] = useState({ rating: 0, title: '', body: '' });
-  const [busy, setBusy] = useState(false);
-  const errors = useFormErrors();
-  const submit = async () => {
-    setBusy(true); errors.clear();
-    try { await post(`/products/${item.productId}/reviews`, f); toast.success('Thank you for your review'); setOpen(false); onDone(); } catch (e) { errors.set(e); } finally { setBusy(false); }
-  };
   return (
     <>
       <Button size="sm" onClick={() => setOpen(true)}><Star size={15} />Rate & review</Button>
-      <Modal open={open} onOpenChange={setOpen} title="Rate this product" description={item.name}>
-        <div className="grid gap-4">
-          {errors.message && <Alert>{errors.message}</Alert>}
-          <StarPicker value={f.rating} onChange={(rating) => setF({ ...f, rating })} />
-          <Field label="Title" error={errors.field('title')}><Input value={f.title} maxLength={120} placeholder="Sum it up in a few words" onChange={(e) => setF({ ...f, title: e.target.value })} /></Field>
-          <Field label="Your review" error={errors.field('body')} hint="What did you like or dislike? Avoid personal details."><Textarea rows={4} value={f.body} onChange={(e) => setF({ ...f, body: e.target.value })} /></Field>
-          <Button loading={busy} disabled={!f.rating} onClick={submit}>Submit review</Button>
-        </div>
-      </Modal>
+      {open && <ReviewComposer productId={item.productId} productName={item.name} open={open} onOpenChange={setOpen} onDone={onDone} />}
     </>
   );
 }
@@ -90,8 +58,9 @@ export default function MyReviewsPage() {
                     <div className="flex-1 min-w-0">
                       <Link href={`/products/${r.product.slug}`} className="text-sm text-muted hover:text-forest line-clamp-1">{r.product.name}</Link>
                       <p className="flex items-center gap-2 mt-1"><span className={cn('inline-flex items-center gap-0.5 rounded px-1.5 py-px text-xs font-bold text-white', r.rating >= 4 ? 'bg-success' : r.rating === 3 ? 'bg-[#c27c0e]' : 'bg-danger')}>{r.rating}<Star size={10} fill="currentColor" /></span><span className="font-semibold">{r.title}</span></p>
-                      <p className="text-[14.5px] mt-1.5">{r.body}</p>
-                      <p className="text-xs text-muted mt-2 flex items-center gap-2">{formatDate(r.createdAt)}{r.status === 'HIDDEN' && <span className="inline-flex items-center gap-1 text-warning font-semibold"><EyeOff size={13} />Hidden by our team for breaking the review policy</span>}</p>
+                      <p className="text-[14.5px] mt-1.5 whitespace-pre-line">{r.body}</p>
+                      {r.images.length > 0 && <div className="flex gap-2 mt-2 flex-wrap">{r.images.map((u) => <span key={u} className="relative size-14 rounded-lg overflow-hidden border border-line bg-cream"><Image src={u} alt="" fill sizes="56px" className="object-cover" unoptimized /></span>)}</div>}
+                      <p className="text-xs text-muted mt-2 flex items-center gap-2">{formatDate(r.createdAt)}{r.helpfulCount > 0 && <span>· {r.helpfulCount} found it helpful</span>}{r.status === 'HIDDEN' && <span className="inline-flex items-center gap-1 text-warning font-semibold"><EyeOff size={13} />Hidden by our team for breaking the review policy</span>}</p>
                     </div>
                   </article>
                 ))}

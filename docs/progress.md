@@ -184,3 +184,19 @@ Fixed:
 New `tests/coupons.test.js` (8 tests): exact split across items with GST per item, cap and ₹1 floor, lowercase
 codes, every refusal reason marked as a coupon problem, once-per-customer with release on cancellation,
 simultaneous orders (per customer and overall limit), saved order equals the coupon quote.
+
+## Reviews with photos, all-reviews page, seller photo uploader (2026-11-25)
+
+- Bug: a new review didn't show on the product page (30 s page cache, first visit after it still stale) and the
+  "N reviews" figure was capped at 20. Reviews now load live from `GET /api/products/:id/reviews` (no-store).
+- Product page: rating summary, customer-photo strip with viewer, the 5 most helpful reviews, "All N reviews".
+- `/products/[slug]/reviews`: sort (most helpful, newest, highest, lowest), star and "with photos" filters,
+  clickable star bars, infinite loading with a "Load more" fallback.
+- Review form (order page and My reviews): stars with words, headline, text, up to 5 photos.
+  `POST /api/reviews/media` — verified buyers only, 40/day, re-encoded; a review may only attach its author's uploads.
+- "Helpful" votes (`POST /api/reviews/:id/helpful`, toggle, not on own review); sort by most helpful.
+- Admin moderation and seller reviews show photos; Media library filters "Review photos"; removing one takes it
+  off the review and tells the reviewer.
+- Seller "Add product": shared uploader, max 4 photos (was 8) with guided slots (front/cover, back, side,
+  close-up), drag & drop, multi-select, cover, reorder, preview. Validation enforces 4.
+- Migration `202611270001_review_media` (additive) applied to Aiven. Tests: `tests/reviews.test.js` (5).

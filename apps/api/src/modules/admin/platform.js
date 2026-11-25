@@ -174,6 +174,12 @@ export function registerAdminPlatform(app, { prisma, storage, mailer }) {
       const uses = await tx.productMedia.findMany({ where: { url: asset.url } });
       await tx.productMedia.deleteMany({ where: { url: asset.url } });
       await tx.catalogProduct.updateMany({ where: { id: { in: uses.map((u) => u.catalogProductId) } }, data: { status: 'CHANGES_REQUESTED' } });
+      // A removed review photo disappears from the review; the reviewer is told why.
+      if (asset.ownerType === 'REVIEW') {
+        const reviews = await tx.review.findMany({ where: { images: { has: asset.url } }, select: { id: true, images: true } });
+        for (const r of reviews) await tx.review.update({ where: { id: r.id }, data: { images: r.images.filter((u) => u !== asset.url) } });
+        await notify(tx, asset.uploadedBy, { title: 'A photo in your review was removed', body: why, link: '/account/reviews' });
+      }
       await tx.mediaAsset.delete({ where: { id } });
       if (asset.storeId) {
         const owners = await tx.sellerMember.findMany({ where: { storeId: asset.storeId, role: 'OWNER' } });

@@ -55,7 +55,9 @@ export type Order = {
 };
 export type PaymentInfo = { required: boolean; method: string; provider: 'razorpay' | 'demo' | null; dueAt: string | null };
 
-export type Review = { id: string; authorName: string; rating: number; title: string; body: string; createdAt: string; verified?: boolean; productName?: string; productSlug?: string };
+export type Review = { id: string; authorName: string; rating: number; title: string; body: string; createdAt: string; verified?: boolean; productName?: string; productSlug?: string; images?: string[]; helpfulCount?: number; votedHelpful?: boolean; mine?: boolean };
+export type ReviewSummary = { average: number | null; count: number; breakdown: { stars: number; count: number }[]; withPhotos: number };
+export type ReviewPage = { reviews: Review[]; total: number; page: number; pages: number; summary: ReviewSummary; photos: { url: string; reviewId: string }[] };
 export type Notification = { id: string; title: string; body: string; link: string | null; read: boolean; createdAt: string };
 export type Ticket = { id: string; number: string; subject: string; orderId: string | null; status: string; createdAt: string; updatedAt: string; customer?: { id: string; name: string; email: string }; messages: { id: string; from: string; authorName: string; body: string; at: string }[] };
 export type Paged<K extends string, T> = { [key in K]: T[] } & { total: number; page: number; pages: number };

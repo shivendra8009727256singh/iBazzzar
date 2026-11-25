@@ -502,7 +502,13 @@ export async function createReview(tx, user, catalogProductId, input) {
   if (!item) throw new DomainError('Only customers who received this product can review it', 403);
   const exists = await tx.review.findUnique({ where: { catalogProductId_userId: { catalogProductId, userId: user.id } } });
   if (exists) throw new DomainError('You have already reviewed this product', 409);
-  const review = await tx.review.create({ data: { id: randomUUID(), catalogProductId, userId: user.id, orderItemId: item.id, authorName: user.name.split(' ')[0], ...input } });
+  const images = [...new Set(input.images ?? [])];
+  if (images.length) {
+    // Every photo must be one this customer uploaded for a review.
+    const own = await tx.mediaAsset.count({ where: { url: { in: images }, uploadedBy: user.id, ownerType: 'REVIEW' } });
+    if (own !== images.length) throw new DomainError('Please upload your photos again', 400);
+  }
+  const review = await tx.review.create({ data: { id: randomUUID(), catalogProductId, userId: user.id, orderItemId: item.id, authorName: user.name.split(' ')[0], rating: input.rating, title: input.title, body: input.body, images } });
   await audit(tx, { actorId: user.id, action: 'review.created', entityType: 'review', entityId: review.id });
   return review;
 }

@@ -343,7 +343,7 @@ export function registerSeller(app, { prisma, storage, shipping, config }) {
   });
 
   app.get('/api/seller/reviews', seller, async (req, res) => {
-    const rows = await prisma.$queryRaw`SELECT r.id, r.rating, r.title, r.body, r."authorName", r."createdAt", cp.name AS product
+    const rows = await prisma.$queryRaw`SELECT r.id, r.rating, r.title, r.body, r.images, r."helpfulCount", r."authorName", r."createdAt", cp.name AS product
       FROM reviews r JOIN order_items oi ON oi.id = r."orderItemId" JOIN seller_orders so ON so.id = oi."sellerOrderId" JOIN catalog_products cp ON cp.id = r."catalogProductId"
       WHERE so."storeId" = ${req.storeId}::uuid ORDER BY r."createdAt" DESC LIMIT 100`;
     res.json({ reviews: rows });

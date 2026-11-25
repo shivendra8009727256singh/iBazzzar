@@ -387,13 +387,13 @@ export function Inventory() {
 }
 
 // ───────────── Reviews ─────────────
-type ReviewRow = { id: string; rating: number; title: string; body: string; status: string; authorName: string; email: string; product: { id: string; name: string; slug: string }; createdAt: string };
+type ReviewRow = { id: string; rating: number; title: string; body: string; images: string[]; helpfulCount: number; status: string; authorName: string; email: string; product: { id: string; name: string; slug: string }; createdAt: string };
 export function Reviews() {
   const list = useAdminTable<ListResponse & { reviews: ReviewRow[] }>('/admin/reviews', ['status', 'rating']);
   const columns: Column<ReviewRow>[] = [
     { key: 'product', label: 'Product', always: true, render: (r) => <Link href={`/admin/products?open=${r.product.id}`} className="font-semibold hover:underline">{r.product.name}</Link> },
     { key: 'rating', label: 'Rating', sort: 'rating', render: (r) => <span className={r.rating <= 2 ? 'text-danger font-bold' : 'font-semibold'}>{r.rating} ★</span> },
-    { key: 'review', label: 'Review', render: (r) => <span className="text-sm"><strong>{r.title}</strong><span className="block text-muted line-clamp-2 max-w-md">{r.body}</span></span> },
+    { key: 'review', label: 'Review', render: (r) => <span className="text-sm"><strong>{r.title}</strong><span className="block text-muted line-clamp-2 max-w-md">{r.body}</span>{r.images.length > 0 && <span className="flex gap-1 mt-1.5">{r.images.map((u) => <a key={u} href={u} target="_blank" rel="noreferrer" className="relative size-10 rounded-md overflow-hidden border border-line bg-cream" aria-label="Open review photo"><Image src={u} alt="" fill sizes="40px" className="object-cover" unoptimized /></a>)}</span>}{r.helpfulCount > 0 && <span className="block text-xs text-muted mt-1">{r.helpfulCount} found it helpful</span>}</span> },
     { key: 'author', label: 'By', render: (r) => <span className="text-sm">{r.authorName}<span className="block text-xs text-muted">{r.email}</span></span> },
     { key: 'date', label: 'Date', sort: 'newest', render: (r) => formatDate(r.createdAt) },
     { key: 'status', label: 'Status', render: (r) => <StatusBadge status={r.status} text={r.status === 'PUBLISHED' ? 'Published' : 'Hidden'} /> },

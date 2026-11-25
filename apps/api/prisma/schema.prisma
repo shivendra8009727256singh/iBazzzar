@@ -223,6 +223,7 @@ enum MediaOwner {
   PLATFORM
   RFQ
   VERIFICATION
+  REVIEW
 }
 
 enum CouponKind {
@@ -271,6 +272,7 @@ model User {
   cart                Cart?
   wishlist            WishlistItem[]
   reviews             Review[]
+  reviewVotes         ReviewVote[]
   notifications       Notification[]
   tickets             SupportTicket[]
   resetTokens         PasswordResetToken[]
@@ -897,13 +899,31 @@ model Review {
   title            String
   body             String
   status           String         @default("PUBLISHED")
+  /// Up to 5 customer photos (/api/media/<id>.webp uploaded by the reviewer).
+  images           String[]       @default([])
+  helpfulCount     Int            @default(0)
   createdAt        DateTime       @default(now()) @db.Timestamptz(3)
   product          CatalogProduct @relation(fields: [catalogProductId], references: [id], onDelete: Cascade)
   user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  votes            ReviewVote[]
 
   @@unique([catalogProductId, userId])
   @@index([catalogProductId, status])
+  @@index([catalogProductId, status, helpfulCount(sort: Desc)])
   @@map("reviews")
+}
+
+/// One "helpful" vote per shopper per review.
+model ReviewVote {
+  reviewId  String   @db.Uuid
+  userId    String   @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  review    Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([reviewId, userId])
+  @@index([userId])
+  @@map("review_votes")
 }
 
 // ───────────────────────────── Orders ─────────────────────────────

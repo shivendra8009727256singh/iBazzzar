@@ -193,7 +193,7 @@ export const productCreateSchema = z.object({
   description: z.string().trim().min(20, 'Please describe the product in at least 20 characters').max(5000),
   highlights: z.array(z.string().trim().min(3).max(140)).max(8).default([]),
   hsnCode: z.string().trim().regex(/^\d{4,8}$/, 'HSN codes are 4 to 8 digits').optional(),
-  images: z.array(mediaUrl).min(1, 'Please add at least one product photo').max(8),
+  images: z.array(mediaUrl).min(1, 'Please add at least one product photo').max(4, 'Add up to 4 photos'),
   attributes: z.record(z.string().trim().min(1).max(40), z.string().trim().min(1).max(120)).default({}),
   variantLabel: z.string().trim().min(1).max(40).default('Standard'),
   weightGrams: z.number().int().min(1).max(500000).default(500),
@@ -220,7 +220,7 @@ export const listingUpdateSchema = z.object({
 
 export const productContentUpdateSchema = z.object({
   name: z.string().trim().min(3).max(150), description: z.string().trim().min(20).max(5000),
-  highlights: z.array(z.string().trim().min(3).max(140)).max(8), images: z.array(mediaUrl).min(1).max(8),
+  highlights: z.array(z.string().trim().min(3).max(140)).max(8), images: z.array(mediaUrl).min(1).max(4, 'Add up to 4 photos'),
   hsnCode: z.string().trim().regex(/^\d{4,8}$/).optional(), attributes: z.record(z.string().trim().min(1).max(40), z.string().trim().min(1).max(120)),
 }).partial();
 
@@ -234,6 +234,7 @@ export const reviewSchema = z.object({
   rating: z.number().int().min(1).max(5),
   title: z.string().trim().min(3).max(120),
   body: z.string().trim().min(10).max(3000),
+  images: z.array(mediaUrl).max(5, 'Add up to 5 photos').default([]),
 });
 
 // ───────────── Seller operations ─────────────

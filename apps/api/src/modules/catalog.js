@@ -96,7 +96,7 @@ export function registerCatalog(app, { prisma }) {
 
     const [rating, reviews, relatedIds, breakdown] = await Promise.all([
       ratings(prisma, [product.id]),
-      prisma.review.findMany({ where: { catalogProductId: product.id, status: 'PUBLISHED' }, orderBy: { createdAt: 'desc' }, take: 20 }),
+      prisma.review.findMany({ where: { catalogProductId: product.id, status: 'PUBLISHED' }, orderBy: [{ helpfulCount: 'desc' }, { createdAt: 'desc' }], take: 5 }), // the page loads reviews live from /api/products/:id/reviews
       prisma.catalogProduct.findMany({ where: { categoryId: product.categoryId, status: 'APPROVED', id: { not: product.id } }, select: { id: true }, take: 8, orderBy: { createdAt: 'desc' } }),
       prisma.review.groupBy({ by: ['rating'], where: { catalogProductId: product.id, status: 'PUBLISHED' }, _count: { _all: true } }),
     ]);
