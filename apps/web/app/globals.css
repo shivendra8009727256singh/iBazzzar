@@ -220,6 +220,11 @@
   .ib-loader-msg:first-child { opacity: 1; }
 }
 
+/* Slim scrollbar for side panels */
+.ib-thin-scroll { scrollbar-width: thin; scrollbar-color: var(--color-line-strong) transparent; }
+.ib-thin-scroll::-webkit-scrollbar { width: 6px; }
+.ib-thin-scroll::-webkit-scrollbar-thumb { background: var(--color-line-strong); border-radius: 9999px; }
+
 /* ───────────── Dual price slider (filters) ───────────── */
 .ib-range-track { position: absolute; left: 0; right: 0; top: 50%; height: 6px; margin-top: -3px; border-radius: 9999px;
   background: linear-gradient(90deg, var(--color-line) var(--lo), var(--color-forest) var(--lo), var(--color-gold) var(--hi), var(--color-line) var(--hi)); }

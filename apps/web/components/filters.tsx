@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -124,7 +124,7 @@ function FilterBody({ categories, facets }: { categories: Category[]; facets: Fa
       </div>
 
       <Section title="Category" icon={LayoutGrid} hint={cat?.name}>
-        <div className="grid gap-1 max-h-80 overflow-y-auto -mx-1 px-1">
+        <div className="grid gap-1">
           {[{ id: 'all', name: 'All categories', slug: '', products: 0, imageUrl: null } as Pick<Category, 'id' | 'name' | 'slug' | 'products' | 'imageUrl'>, ...categories.filter((c) => !c.parentId)].map((c) => {
             const on = (params.get('category') ?? '') === c.slug;
             return (
@@ -160,7 +160,7 @@ function FilterBody({ categories, facets }: { categories: Category[]; facets: Fa
               <input aria-label="Search brands" className="w-full rounded-xl border border-line bg-cream/60 py-2 pl-9 pr-3 text-[13.5px] outline-none focus:border-forest" placeholder="Find a brand" value={brandQuery} onChange={(e) => setBrandQuery(e.target.value)} />
             </div>
           )}
-          <div className="grid gap-1 max-h-72 overflow-y-auto -mx-1 px-1">
+          <div className="grid gap-1">
             {shownBrands.map((b) => {
               const on = brands.includes(b.slug);
               return (
@@ -214,9 +214,26 @@ function FilterBody({ categories, facets }: { categories: Category[]; facets: Fa
   );
 }
 
-/** Desktop filter column (scrolls with the page). */
+/** Desktop filter column: stays in view just below the site header while the products scroll; scrolls inside itself when taller than the screen. */
 export function FilterSidebar(props: { categories: Category[]; facets: Facets }) {
-  return <aside className="hidden lg:block w-[292px] shrink-0 self-start overflow-hidden rounded-3xl border border-line bg-white shadow-card" aria-label="Filters"><FilterBody {...props} /></aside>;
+  const [top, setTop] = useState(160);
+  useEffect(() => {
+    // The header changes height as the page scrolls, so follow its real height.
+    const header = document.querySelector('header');
+    if (!header) return;
+    const sync = () => setTop(Math.round(header.getBoundingClientRect().height) + 16);
+    sync();
+    const ro = new ResizeObserver(sync);
+    ro.observe(header);
+    return () => ro.disconnect();
+  }, []);
+  return (
+    <aside className="hidden lg:block w-[292px] shrink-0 self-start sticky z-10 transition-[top] duration-200" style={{ top }} aria-label="Filters">
+      <div className="ib-thin-scroll overflow-y-auto overflow-x-hidden overscroll-contain rounded-3xl border border-line bg-white shadow-card" style={{ maxHeight: `calc(100vh - ${top + 16}px)` }}>
+        <FilterBody {...props} />
+      </div>
+    </aside>
+  );
 }
 
 /** Phone and tablet: a Filters button that opens the same filters in a bottom sheet. */
