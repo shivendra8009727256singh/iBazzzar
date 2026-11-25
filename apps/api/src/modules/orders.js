@@ -95,7 +95,8 @@ export function registerOrders(app, { prisma, config, payments, limits, logger }
       }
       const created = await orders.createOrder(tx, {
         user, organizationId, q, address: input.address, billingGstin: input.billingGstin, paymentMethod: input.paymentMethod,
-        demo: !payments.configured && config.demoPayments,
+        // Only a simulated online payment is demo money; COD, bank transfer and credit terms are real commitments.
+        demo: !payments.configured && config.demoPayments && input.paymentMethod === 'ONLINE',
       });
       await tx.idempotencyKey.create({ data: { id: keyId, scope: 'checkout', userId: user.id, fingerprint, resourceId: created.id } });
       if (input.saveAddress && req.user) {

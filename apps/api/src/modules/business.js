@@ -180,7 +180,7 @@ export function registerBusiness(app, { prisma, storage, config, payments }) {
     const input = poCheckoutSchema.parse(req.body);
     if (input.paymentMethod === 'ONLINE' && !payments.configured && !config.demoPayments) throw new DomainError('Online payment isn’t available right now. Choose bank transfer.', 503);
     const mem = await member(req);
-    const order = await transaction(prisma, (tx) => b2b.checkoutPurchaseOrder(tx, { member: mem, user: req.user, poId: uuid.parse(req.params.id), address: input.address, paymentMethod: input.paymentMethod, demo: !payments.configured && config.demoPayments }));
+    const order = await transaction(prisma, (tx) => b2b.checkoutPurchaseOrder(tx, { member: mem, user: req.user, poId: uuid.parse(req.params.id), address: input.address, paymentMethod: input.paymentMethod, demo: !payments.configured && config.demoPayments && input.paymentMethod === 'ONLINE' }));
     res.status(201).json({ order: customerOrder(await prisma.order.findUnique({ where: { id: order.id }, include: orderDetailInclude })) });
   });
 

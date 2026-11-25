@@ -101,7 +101,14 @@ export function registerAdminInsights(app, { prisma }) {
     const d60 = new Date(now - 60 * DAY);
     // Placed = real orders the customer committed to (paid, COD or credit), not cancelled.
     const placed = Prisma.sql`NOT o.demo AND o."paymentStatus" NOT IN ('UNPAID','BANK_TRANSFER_PENDING','DEMO_SIMULATED') AND o.status <> 'CANCELLED'`;
-    const window = (from, to) => prisma.$queryRaw`SELECT COUNT(*)::int AS orders, COALESCE(SUM(o."totalPaise"), 0)::bigint AS gmv, COUNT(DISTINCT o."userId")::int AS buyers FROM orders o WHERE ${placed} AND o."createdAt" >= ${from} AND o."createdAt" < ${to}`;
+    const window = (from, to) => prisma.$queryRaw`SELECT
+        COUNT(*) FILTER (WHERE ${placed})::int AS orders,
+        COALESCE(SUM(o."totalPaise") FILTER (WHERE ${placed}), 0)::bigint AS gmv,
+        COUNT(DISTINCT o."userId") FILTER (WHERE ${placed})::int AS buyers,
+        COUNT(*) FILTER (WHERE o.demo AND o.status <> 'CANCELLED')::int AS "demoOrders",
+        COALESCE(SUM(o."totalPaise") FILTER (WHERE o.demo AND o.status <> 'CANCELLED'), 0)::bigint AS "demoGmv",
+        COUNT(*) FILTER (WHERE NOT o.demo AND o."paymentStatus" IN ('UNPAID','BANK_TRANSFER_PENDING') AND o.status <> 'CANCELLED')::int AS awaiting
+        FROM orders o WHERE o."createdAt" >= ${from} AND o."createdAt" < ${to}`;
     const { lowStockThreshold } = await getSetting(prisma, 'platform');
     const [[today], [yesterday], [last30], [prev30], pipeline, topProducts, topCategories, paymentMix, lowStock, newUsers, reviews, rating, b2b, liveProducts, activity] = await Promise.all([
       window(todayStart, new Date(now + 60_000)), window(yesterdayStart, todayStart), window(d30, new Date(now + 60_000)), window(d60, d30),
@@ -135,7 +142,8 @@ export function registerAdminInsights(app, { prisma }) {
     ]);
     const people = new Map((await prisma.user.findMany({ where: { id: { in: [...new Set(activity.map((a) => a.actorId).filter((x) => /^[0-9a-f-]{36}$/.test(x ?? '')))] } }, select: { id: true, name: true } })).map((u) => [u.id, u.name]));
     const money = (v) => (finance ? n(v) : null);
-    const w = (x) => ({ orders: x.orders, buyers: x.buyers, gmvPaise: money(x.gmv) });
+    // orders/gmv = real committed orders; demoOrders and awaiting are shown beside them so nothing is silently hidden.
+    const w = (x) => ({ orders: x.orders, buyers: x.buyers, gmvPaise: money(x.gmv), demoOrders: x.demoOrders, demoGmvPaise: money(x.demoGmv), awaitingPayment: x.awaiting });
     res.json({
       today: w(today), yesterday: w(yesterday), last30: w(last30), prev30: w(prev30),
       pipeline: pipeline[0],

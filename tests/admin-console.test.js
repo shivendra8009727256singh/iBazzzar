@@ -312,3 +312,23 @@ describe('Homepage deal block', () => {
     expect((await shopper.agent.put('/api/admin/home-deal').send({ enabled: false })).status).toBe(403);
   });
 });
+
+describe('Dashboard today', () => {
+  it('in demo mode a COD order is real and counted today; a simulated online order shows as demo, not as sales', async () => {
+    const before = (await admin.agent.get('/api/admin/dashboard/extra')).body.today;
+    const shopper = await ctx.register('customer');
+    const items = [{ listingId: listing.id, quantity: listing.moq }];
+    const cod = await shopper.agent.post('/api/checkout').set('Idempotency-Key', key()).send({ items, address, paymentMethod: 'COD' });
+    expect(cod.status).toBe(201);
+    expect((await ctx.prisma.order.findUnique({ where: { id: cod.body.order.id } })).demo).toBe(false);
+    const online = await shopper.agent.post('/api/checkout').set('Idempotency-Key', key()).send({ items, address, paymentMethod: 'ONLINE' });
+    expect(online.status).toBe(201);
+    expect((await ctx.prisma.order.findUnique({ where: { id: online.body.order.id } })).demo).toBe(true);
+
+    const after = (await admin.agent.get('/api/admin/dashboard/extra')).body.today;
+    expect(after.orders).toBe(before.orders + 1);
+    expect(after.gmvPaise).toBe(before.gmvPaise + cod.body.order.totalPaise);
+    expect(after.demoOrders).toBe(before.demoOrders + 1);
+    expect(after.demoGmvPaise).toBe(before.demoGmvPaise + online.body.order.totalPaise);
+  });
+});

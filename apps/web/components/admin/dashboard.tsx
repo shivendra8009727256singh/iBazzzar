@@ -14,7 +14,7 @@ import { useSession } from '../providers';
 import { Alert, StatusBadge } from '../ui';
 import type { Can } from './people';
 
-type Win = { orders: number; buyers: number; gmvPaise: number | null };
+type Win = { orders: number; buyers: number; gmvPaise: number | null; demoOrders: number; demoGmvPaise: number | null; awaitingPayment: number };
 type Dashboard = {
   metrics: { orders: number; awaitingPayment: number; toShip: number; customers: number; activeSellers: number; activeRfqs: number; lowStock: number; paidGmvPaise: number | null; averageOrderPaise: number | null; platformRevenuePaise: number | null; demoGmvPaise: number | null; refundsPendingPaise: number | null; refundsPending: number };
   queues: { sellers: number; products: number; offers: number; organizations: number; returns: number; tickets: number; bankTransfers: number };
@@ -193,11 +193,13 @@ export function Dashboard({ can }: { can: Can }) {
                   <p className="text-xs text-white/70">Today’s orders</p>
                   <p className="text-3xl font-bold"><CountUp value={x.today.orders} /></p>
                   <p className="text-[11px] text-white/70">yesterday {x.yesterday.orders}</p>
+                  {(x.today.demoOrders > 0 || x.today.awaitingPayment > 0) && <p className="text-[11px] text-gold-light mt-0.5">{[x.today.awaitingPayment ? `+${x.today.awaitingPayment} awaiting payment` : '', x.today.demoOrders ? `+${x.today.demoOrders} demo` : ''].filter(Boolean).join(' · ')}</p>}
                 </div>
                 <div className="rounded-2xl bg-white/10 border border-white/15 backdrop-blur px-4 py-3">
                   <p className="text-xs text-white/70">Today’s sales</p>
                   <p className="text-2xl sm:text-3xl font-bold break-words">{x.today.gmvPaise == null ? '—' : <CountUp value={x.today.gmvPaise} format={rupees} />}</p>
                   <p className="text-[11px] text-white/70">{x.yesterday.gmvPaise == null ? 'finance only' : `yesterday ${rupees(x.yesterday.gmvPaise)}`}</p>
+                  {!!x.today.demoGmvPaise && <p className="text-[11px] text-gold-light mt-0.5">+{rupees(x.today.demoGmvPaise)} in demo orders</p>}
                 </div>
               </div>
             )}
