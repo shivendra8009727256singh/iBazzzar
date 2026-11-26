@@ -23,6 +23,10 @@ Copy `.env.example` to `.env` and fill every value. Production refuses to start 
 `DEMO_PAYMENTS=true`, a missing `APP_ENCRYPTION_KEY`, `MAIL_PROVIDER=console`, a non-https `WEB_ORIGIN`, or any Razorpay key
 that is not `rzp_test_…` (live keys stay blocked until live payments are approved — remove that check deliberately then).
 
+Site address: `WEB_ORIGIN` is the address people use (https in production). Sign-ins and forms are accepted only from that
+address, plus any listed in `ALLOWED_ORIGINS` (comma-separated), e.g. `https://www.ibazzzar.com,https://ibazzzar.vercel.app`.
+During development `localhost` and `127.0.0.1` on the same port both work.
+
 Web ↔ API: set the same `INTERNAL_API_KEY` (e.g. `openssl rand -hex 24`) for the API and the web app. The web server sends it
 when it renders pages, so every visitor's page loads are not counted as one address against the 300-requests-a-minute
 limit. Production refuses to start without it. With Docker, run compose with `--env-file ../.env` so the web container gets it.

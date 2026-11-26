@@ -29,3 +29,30 @@ describe('Internal requests from the web server', () => {
     expect(isInternalRequest({ get: () => key }, null)).toBe(false); // no key configured: nobody is exempt
   });
 });
+
+describe('Allowed site addresses (origin check)', () => {
+  const db = { DATABASE_URL: 'postgresql://u:p@127.0.0.1:5544/db' };
+  it('treats localhost and 127.0.0.1 on the same port as one site during development', async () => {
+    const config = loadConfig({ ...base, ...db, WEB_ORIGIN: 'http://127.0.0.1:3000' });
+    expect(config.allowedOrigins).toEqual(['http://127.0.0.1:3000', 'http://localhost:3000']);
+    const express = (await import('express')).default;
+    const request = (await import('supertest')).default;
+    const { originCheck } = await import('../apps/api/src/http/middleware.js');
+    const app = express();
+    app.use(originCheck(config));
+    app.post('/x', (_req, res) => res.json({ ok: true }));
+    expect((await request(app).post('/x').set('Origin', 'http://localhost:3000')).status).toBe(200);
+    expect((await request(app).post('/x').set('Origin', 'http://127.0.0.1:3000')).status).toBe(200);
+    const evil = await request(app).post('/x').set('Origin', 'https://evil.example');
+    expect(evil.status).toBe(403);
+    expect(evil.body.error).toMatch(/Open the site at http:\/\/127\.0\.0\.1:3000/);
+    expect((await request(app).post('/x').set('Origin', 'http://localhost:3001')).status).toBe(403);
+  });
+
+  it('in production allows only WEB_ORIGIN plus ALLOWED_ORIGINS, with no localhost twin', () => {
+    const prod = { ...db, NODE_ENV: 'production', APP_ENCRYPTION_KEY: 'a'.repeat(64), INTERNAL_API_KEY: 'k'.repeat(48), MAIL_PROVIDER: 'none' };
+    expect(loadConfig({ ...prod, WEB_ORIGIN: 'https://ibazzzar.com', ALLOWED_ORIGINS: 'https://www.ibazzzar.com, https://ibazzzar.vercel.app/' }).allowedOrigins)
+      .toEqual(['https://ibazzzar.com', 'https://www.ibazzzar.com', 'https://ibazzzar.vercel.app']);
+    expect(() => loadConfig({ ...prod, WEB_ORIGIN: 'https://ibazzzar.com', ALLOWED_ORIGINS: 'not a url' })).toThrow(/ALLOWED_ORIGINS/);
+  });
+});

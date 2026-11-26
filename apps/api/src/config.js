@@ -6,6 +6,8 @@ const schema = z.object({
   PORT: z.coerce.number().int().min(1).max(65535).default(4000),
   HOST: z.string().default('127.0.0.1'),
   WEB_ORIGIN: z.url().default('http://127.0.0.1:3000'),
+  // Extra site addresses allowed to send sign-ins and forms (comma-separated), e.g. www and *.vercel.app addresses.
+  ALLOWED_ORIGINS: z.string().optional(),
   DATABASE_URL: z.string().min(10, 'DATABASE_URL is required'),
   // Most connections this API process opens. Small hosted plans allow few (Aiven Startup: 15, 3 reserved), and
   // other apps on the same server share them; extra queries wait for a free connection instead of failing.
@@ -39,6 +41,24 @@ function isLocalDatabase(url) {
   try { return ['127.0.0.1', 'localhost', '::1', '[::1]'].includes(new URL(url).hostname); } catch { return false; }
 }
 
+/**
+ * Site addresses whose pages may send state-changing requests. Always WEB_ORIGIN plus ALLOWED_ORIGINS; during development
+ * the same port on localhost and 127.0.0.1 count as one site, since browsers treat them as different origins.
+ */
+export function allowedOrigins(webOrigin, extra, production) {
+  const list = [webOrigin, ...(extra ?? '').split(',')].map((o) => o.trim()).filter(Boolean).map((o) => {
+    try { return new URL(o).origin; } catch { throw new Error(`ALLOWED_ORIGINS has an invalid address: ${o}`); }
+  });
+  if (!production) {
+    for (const o of [...list]) {
+      const u = new URL(o);
+      const twin = { localhost: '127.0.0.1', '127.0.0.1': 'localhost' }[u.hostname];
+      if (twin) { u.hostname = twin; list.push(u.origin); }
+    }
+  }
+  return [...new Set(list)];
+}
+
 export function loadConfig(env = process.env) {
   const parsed = schema.safeParse(env);
   if (!parsed.success) {
@@ -67,6 +87,7 @@ export function loadConfig(env = process.env) {
     port: e.PORT,
     host: e.HOST,
     origin: e.WEB_ORIGIN,
+    allowedOrigins: allowedOrigins(e.WEB_ORIGIN, e.ALLOWED_ORIGINS, production),
     databaseUrl: e.DATABASE_URL,
     poolSize: e.DATABASE_POOL_SIZE ?? (isLocalDatabase(e.DATABASE_URL) ? 10 : 4),
     internalKey: e.INTERNAL_API_KEY ?? null,

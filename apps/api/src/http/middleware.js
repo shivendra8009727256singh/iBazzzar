@@ -133,7 +133,10 @@ export function originCheck(config) {
     // Server-to-server webhooks carry no Origin; they are authenticated by their HMAC signature instead.
     if (req.originalUrl.split('?')[0] === '/api/payments/webhook') return next();
     const origin = req.get('origin');
-    if (origin !== config.origin) return res.status(403).json({ error: 'Request origin is not allowed' });
+    const allowed = config.allowedOrigins ?? [config.origin];
+    if (!allowed.includes(origin)) {
+      return res.status(403).json({ error: `This request came from a site address the server doesn’t recognise (${origin || 'unknown'}). Open the site at ${config.origin}.` });
+    }
     next();
   };
 }
