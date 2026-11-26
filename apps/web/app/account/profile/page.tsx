@@ -2,12 +2,23 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Monitor } from 'lucide-react';
+import { Monitor, Smartphone } from 'lucide-react';
 import { api, patch, post } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
 import { useSession } from '@/components/providers';
 import { Alert, Badge, Button, Checkbox, Field, Input, PageHeader, Spinner, useFormErrors } from '@/components/ui';
 import { PrivacySection } from '@/components/privacy-section';
+
+/** "Chrome on Windows" from a browser's user-agent string; the full string stays available as a tooltip. */
+function deviceName(ua: string | null) {
+  if (!ua) return 'Unknown device';
+  const browser = /Edg\//.test(ua) ? 'Edge' : /OPR\/|Opera/.test(ua) ? 'Opera' : /SamsungBrowser/.test(ua) ? 'Samsung Internet'
+    : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : null;
+  const os = /Windows/.test(ua) ? 'Windows' : /Android/.test(ua) ? 'Android' : /iPhone|iPad|iPod/.test(ua) ? 'iOS'
+    : /Mac OS X|Macintosh/.test(ua) ? 'Mac' : /Linux/.test(ua) ? 'Linux' : null;
+  if (browser && os) return `${browser} on ${os}`;
+  return browser ?? os ?? ua;
+}
 
 export default function ProfilePage() {
   const { user } = useSession();
@@ -50,8 +61,20 @@ export default function ProfilePage() {
         </section>
         <section className="card card-pad max-w-2xl">
           <h2 className="text-lg mb-3">Signed-in devices</h2>
-          <ul className="grid gap-2">
-            {sessions?.sessions.map((s) => <li key={s.id} className="flex items-center gap-3 text-sm"><Monitor size={17} className="text-forest" /><span className="flex-1 min-w-0 truncate" title={s.userAgent ?? undefined}>{s.userAgent ?? 'Unknown device'}<span className="block text-xs text-muted">Signed in {formatDateTime(s.createdAt)}</span></span>{s.current && <Badge tone="success">This device</Badge>}</li>)}
+          <ul className="grid grid-cols-[minmax(0,1fr)] gap-3">
+            {sessions?.sessions.map((s) => {
+              const Icon = /Mobile|Android|iPhone|iPad/i.test(s.userAgent ?? '') ? Smartphone : Monitor;
+              return (
+                <li key={s.id} className="flex min-w-0 items-center gap-3 text-sm">
+                  <Icon size={17} className="shrink-0 text-forest" />
+                  <span className="flex-1 min-w-0" title={s.userAgent ?? undefined}>
+                    <span className="block truncate font-medium">{deviceName(s.userAgent)}</span>
+                    <span className="block text-xs text-muted">Signed in {formatDateTime(s.createdAt)}</span>
+                  </span>
+                  {s.current && <Badge tone="success" className="shrink-0">This device</Badge>}
+                </li>
+              );
+            })}
           </ul>
           <p className="text-xs text-muted mt-3">Changing your password signs out every other device.</p>
         </section>
