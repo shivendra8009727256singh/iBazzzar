@@ -3,7 +3,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Plus, Trash2, Paperclip, Search } from 'lucide-react';
+import { Plus, Trash2, Paperclip, Search, X } from 'lucide-react';
 import { api, post, upload } from '@/lib/api';
 import type { Product } from '@/lib/types';
 import { Alert, Button, Field, Input, PageHeader, Textarea, useFormErrors } from '@/components/ui';
@@ -30,9 +30,26 @@ function ProductPicker({ onPick }: { onPick: (p: Product) => void }) {
 
 function NewRfq() {
   const router = useRouter();
-  const productParam = useSearchParams().get('product');
+  const search = useSearchParams();
+  const productParam = search.get('product');
+  const fromRfq = search.get('from');
+  const fromPo = search.get('fromPo');
   const [form, setForm] = useState({ title: '', deliveryPincode: '', neededBy: '', notes: '' });
   const [items, setItems] = useState<Item[]>([]);
+  // "Order again": the same items and quantities, sent to the same sellers unless the buyer widens it.
+  const [sellers, setSellers] = useState<{ id: string; name: string }[]>([]);
+  const [source, setSource] = useState<string | null>(null);
+  useEffect(() => {
+    const path = fromPo ? `/business/purchase-orders/${fromPo}/draft` : fromRfq ? `/business/rfqs/${fromRfq}/draft` : null;
+    if (!path) return;
+    api<{ draft: { title: string; deliveryPincode: string; notes: string; items: { catalogProductId: string | null; description: string; quantity: number }[]; sellers: { id: string; name: string }[]; source: string } }>(path)
+      .then(({ draft }) => {
+        setForm({ title: draft.title, deliveryPincode: draft.deliveryPincode, neededBy: '', notes: draft.notes });
+        setItems(draft.items.map((i) => ({ ...(i.catalogProductId ? { catalogProductId: i.catalogProductId } : {}), description: i.description, quantity: i.quantity })));
+        setSellers(draft.sellers); setSource(draft.source);
+      })
+      .catch((e) => toast.error((e as Error).message));
+  }, [fromRfq, fromPo]);
   const [files, setFiles] = useState<{ id: string; name: string }[]>([]);
   const [busy, setBusy] = useState(false);
   const errors = useFormErrors();
@@ -50,7 +67,7 @@ function NewRfq() {
     try {
       const r = await post<{ rfq: { id: string; number: string; sellers: number } }>('/business/rfqs', {
         title: form.title, deliveryPincode: form.deliveryPincode, notes: form.notes, ...(form.neededBy ? { neededBy: new Date(`${form.neededBy}T12:00:00+05:30`).toISOString() } : {}),
-        items, attachmentIds: files.map((f) => f.id),
+        items, attachmentIds: files.map((f) => f.id), ...(sellers.length ? { storeIds: sellers.map((s) => s.id) } : {}),
       });
       toast.success(`Request ${r.rfq.number} sent to ${r.rfq.sellers} seller(s)`);
       router.push(`/business/rfqs/${r.rfq.id}`);
@@ -61,6 +78,18 @@ function NewRfq() {
       <PageHeader title="New request for quotation" description="We send it to every approved seller offering these products wholesale. Prices you receive are tax-inclusive." />
       <div className="card card-pad grid gap-5 max-w-3xl">
         {errors.message && <Alert>{errors.message}</Alert>}
+        {source && (
+          <div className="rounded-2xl border border-gold/40 bg-[#fdf6e6] p-4 text-sm">
+            <p className="font-semibold">Ordering again from {source}</p>
+            <p className="text-muted mt-0.5">Items and quantities are filled in — change anything you need. {sellers.length ? 'It goes only to:' : 'It goes to every approved seller of these products.'}</p>
+            {sellers.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 mt-2">
+                {sellers.map((s) => <span key={s.id} className="inline-flex items-center gap-1.5 rounded-full bg-white border border-line pl-3 pr-1.5 py-1 font-semibold">{s.name}<button type="button" className="grid size-5 place-items-center rounded-full hover:bg-cream" aria-label={`Don’t send to ${s.name}`} onClick={() => setSellers(sellers.filter((x) => x.id !== s.id))}><X size={12} /></button></span>)}
+                <button type="button" className="text-xs font-semibold text-forest underline" onClick={() => setSellers([])}>Ask all sellers instead</button>
+              </div>
+            )}
+          </div>
+        )}
         <Field label="Title" required error={errors.field('title')} hint="e.g. Notebooks for the Pune office"><Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Delivery PIN code" required error={errors.field('deliveryPincode')}><Input inputMode="numeric" maxLength={6} value={form.deliveryPincode} onChange={(e) => setForm({ ...form, deliveryPincode: e.target.value.replace(/\D/g, '') })} /></Field>

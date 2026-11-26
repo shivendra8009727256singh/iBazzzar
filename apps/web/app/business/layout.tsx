@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
-import { LayoutDashboard, ClipboardList, FileCheck2, Package, Users, Building2 } from 'lucide-react';
+import { LayoutDashboard, ClipboardList, FileCheck2, Package, Users, Building2, Wallet, FileText, PieChart, MapPin } from 'lucide-react';
 import { post } from '@/lib/api';
 import { WorkspaceShell } from '@/components/workspace';
 import { useSession } from '@/components/providers';
@@ -13,6 +13,10 @@ const NAV = [
   { href: '/business/rfqs', label: 'Quotations', icon: ClipboardList },
   { href: '/business/purchase-orders', label: 'Purchase orders', icon: FileCheck2 },
   { href: '/business/orders', label: 'Orders', icon: Package },
+  { href: '/business/credit', label: 'Credit & dues', icon: Wallet },
+  { href: '/business/statement', label: 'Statement', icon: FileText },
+  { href: '/business/spend', label: 'Spending', icon: PieChart },
+  { href: '/business/addresses', label: 'Addresses', icon: MapPin },
   { href: '/business/team', label: 'Team & settings', icon: Users },
 ];
 

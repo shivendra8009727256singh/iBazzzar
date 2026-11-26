@@ -6,12 +6,16 @@ import { Logo } from './logo';
 export type Invoice = {
   number: string; financialYear: string; issuedAt: string; orderNumber: string; orderDate: string;
   seller: { name: string; tradeName: string; gstin: string | null; pan: string | null; address: { line1: string; city: string; state: string; pincode: string }; stateCode: string; gstRegistered: boolean };
-  buyer: { name: string; address: { line1: string; line2?: string; city: string; state: string; pincode: string }; gstin: string | null };
+  buyer: { name: string; tradeName?: string | null; address: Addr | null; gstin: string | null; business?: boolean };
+  shipTo?: { name: string; address: Addr };
   placeOfSupply: string; reverseCharge: boolean;
   items: { name: string; variantLabel: string; sku: string; hsnCode: string | null; quantity: number; unitPaise: number; discountPaise: number; taxablePaise: number; taxRateBps: number; cgstPaise: number; sgstPaise: number; igstPaise: number; totalPaise: number }[];
   totals: { taxablePaise: number; cgstPaise: number; sgstPaise: number; igstPaise: number; shippingPaise: number; totalPaise: number };
   note: string | null;
 };
+
+type Addr = { line1?: string; line2?: string; city?: string; state?: string; pincode?: string };
+const fmtAddr = (a: Addr) => [a.line1, a.line2, a.city, a.state && `${a.state} ${a.pincode ?? ''}`].filter(Boolean).join(', ');
 
 /** Printable GST tax invoice (or bill of supply for unregistered sellers), issued by the seller. */
 export function InvoiceView({ invoice: v }: { invoice: Invoice }) {
@@ -38,10 +42,18 @@ export function InvoiceView({ invoice: v }: { invoice: Invoice }) {
             {v.seller.pan && <p>PAN: {v.seller.pan}</p>}
           </div>
           <div>
-            <p className="eyebrow mb-1">Bill and ship to</p>
+            <p className="eyebrow mb-1">{v.buyer.business ? 'Bill to' : 'Bill and ship to'}</p>
             <p className="font-semibold">{v.buyer.name}</p>
-            <p className="text-muted">{v.buyer.address.line1}{v.buyer.address.line2 ? `, ${v.buyer.address.line2}` : ''}, {v.buyer.address.city}, {v.buyer.address.state} {v.buyer.address.pincode}</p>
+            {v.buyer.tradeName && v.buyer.tradeName !== v.buyer.name && <p>{v.buyer.tradeName}</p>}
+            {v.buyer.address && <p className="text-muted">{fmtAddr(v.buyer.address)}</p>}
             {v.buyer.gstin && <p>GSTIN: <strong>{v.buyer.gstin}</strong></p>}
+            {v.buyer.business && v.shipTo && (
+              <div className="mt-3">
+                <p className="eyebrow mb-1">Ship to</p>
+                <p className="font-semibold">{v.shipTo.name}</p>
+                <p className="text-muted">{fmtAddr(v.shipTo.address)}</p>
+              </div>
+            )}
             <p className="mt-1">Place of supply: state code {v.placeOfSupply} · Reverse charge: {v.reverseCharge ? 'Yes' : 'No'}</p>
           </div>
         </div>

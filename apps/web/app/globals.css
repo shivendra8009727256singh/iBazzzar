@@ -241,3 +241,12 @@
 @keyframes brand-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 @media (prefers-reduced-motion: reduce) { [class*='animate-[hero-float'] { animation: none !important; } }
 .no-scrollbar { scrollbar-width: none; } .no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* Printing documents (invoices, purchase orders, statements): A4 with sensible margins, white background. */
+@page { size: A4; margin: 12mm; }
+@media print {
+  body { background: #fff !important; }
+  .container-page { max-width: none !important; padding: 0 !important; }
+  main { padding: 0 !important; min-height: 0 !important; }
+  table { page-break-inside: auto; } tr { page-break-inside: avoid; }
+}

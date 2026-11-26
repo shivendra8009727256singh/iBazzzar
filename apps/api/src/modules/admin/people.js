@@ -9,6 +9,7 @@ import { ilike } from '../../lib/http.js';
 import { listParams, sendList, bulkInput } from '../../lib/admin-list.js';
 import { EDITABLE_ROLES, CAPABILITY_LABELS, permissionMatrix, invalidatePermissions } from '../../services/permissions.js';
 import { creditOutstanding } from '../../services/orders.js';
+import { creditSummary } from '../../services/b2b-finance.js';
 
 const m = toPaise;
 const reason = z.string().trim().min(5, 'Please give a short reason (at least 5 characters)').max(300);
@@ -251,19 +252,21 @@ export function registerAdminPeople(app, { prisma }) {
     const id = uuid.parse(req.params.id);
     const o = await prisma.organization.findUnique({ where: { id }, include: { members: { include: { user: { select: { id: true, name: true, email: true } } } }, approvalPolicy: true, verifications: true, addresses: true } });
     if (!o) throw new DomainError('Business account not found', 404);
-    const [orders, spend, rfqs, pos, outstanding, activity] = await Promise.all([
+    const [orders, spend, rfqs, pos, outstanding, activity, credit] = await Promise.all([
       prisma.order.findMany({ where: { organizationId: id }, orderBy: { createdAt: 'desc' }, take: 20, select: { id: true, number: true, createdAt: true, status: true, paymentStatus: true, paymentMethod: true, totalPaise: true, paymentDueAt: true } }),
       prisma.order.aggregate({ where: { organizationId: id, paymentStatus: { in: PAID } }, _sum: { totalPaise: true }, _count: { _all: true } }),
       prisma.rfq.findMany({ where: { organizationId: id }, orderBy: { createdAt: 'desc' }, take: 10, select: { id: true, number: true, title: true, status: true, createdAt: true } }),
       prisma.purchaseOrder.findMany({ where: { organizationId: id }, orderBy: { createdAt: 'desc' }, take: 10, select: { id: true, number: true, status: true, totalPaise: true, paymentTerms: true, createdAt: true } }),
       creditOutstanding(prisma, id),
       prisma.auditLog.findMany({ where: { entityType: 'organization', entityId: id }, orderBy: { createdAt: 'desc' }, take: 30 }),
+      creditSummary(prisma, id),
     ]);
     const { approvalPolicy, ...org } = o;
     res.json({
       organization: { ...org, creditLimitPaise: m(o.creditLimitPaise), approvalThresholdPaise: m(approvalPolicy?.thresholdPaise ?? 0) },
       members: o.members.map((x) => ({ ...x.user, role: x.role })),
-      stats: { spendPaise: m(spend._sum.totalPaise ?? 0), paidOrders: spend._count._all, outstandingPaise: outstanding, availableCreditPaise: o.creditApproved ? Math.max(0, m(o.creditLimitPaise) - outstanding) : 0 },
+      stats: { spendPaise: m(spend._sum.totalPaise ?? 0), paidOrders: spend._count._all, outstandingPaise: outstanding, availableCreditPaise: o.creditApproved ? Math.max(0, m(o.creditLimitPaise) - outstanding) : 0, overduePaise: credit.overduePaise, overdueCount: credit.overdueCount, dueSoonPaise: credit.dueSoonPaise },
+      dues: credit.open,
       orders: orders.map((x) => ({ ...x, totalPaise: m(x.totalPaise) })), rfqs, purchaseOrders: pos.map((x) => ({ ...x, totalPaise: m(x.totalPaise) })),
       activity, notes: await notesFor(prisma, 'organization', id),
     });

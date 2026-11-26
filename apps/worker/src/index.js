@@ -7,6 +7,7 @@ import pino from 'pino';
 import { loadConfig } from '../../api/src/config.js';
 import { createPrisma } from '../../api/src/lib/db.js';
 import { expireUnpaid } from '../../api/src/services/orders.js';
+import { runB2bReminders } from '../../api/src/services/b2b-finance.js';
 
 loadEnv({ path: fileURLToPath(new URL('../../../.env', import.meta.url)), quiet: true });
 const logger = pino({ name: 'ibazzzar-worker' });
@@ -23,6 +24,8 @@ const queue = new Queue('maintenance', { connection });
 const jobs = {
   // Unpaid orders past their payment window release their reserved stock.
   'expire-unpaid-orders': async () => ({ expired: await expireUnpaid(prisma) }),
+  // Credit dues (due soon, due today, overdue) and quotations about to expire. Each reminder is sent once.
+  'b2b-reminders': async () => runB2bReminders(prisma),
   // Housekeeping: expired sessions, used tokens and idempotency keys older than 30 days.
   cleanup: async () => {
     const now = new Date();
@@ -38,6 +41,7 @@ const jobs = {
 };
 
 await queue.upsertJobScheduler('expire-unpaid-orders', { every: 5 * 60_000 }, { name: 'expire-unpaid-orders' });
+await queue.upsertJobScheduler('b2b-reminders', { every: 30 * 60_000 }, { name: 'b2b-reminders' });
 await queue.upsertJobScheduler('cleanup', { pattern: '30 3 * * *', tz: 'Asia/Kolkata' }, { name: 'cleanup' });
 
 const worker = new Worker('maintenance', async (job) => {

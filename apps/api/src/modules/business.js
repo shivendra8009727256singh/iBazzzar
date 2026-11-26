@@ -7,6 +7,7 @@ import { transaction, toPaise } from '../lib/db.js';
 import { audit, notify } from '../lib/audit.js';
 import { pageParams } from '../lib/http.js';
 import * as b2b from '../services/b2b.js';
+import { creditSummary } from '../services/b2b-finance.js';
 import { processDocument, MAX_DOCUMENT_BYTES } from '../services/media.js';
 import { customerOrder, orderDetailInclude } from './orders.js';
 
@@ -47,11 +48,13 @@ export function registerBusiness(app, { prisma, storage, config, payments }) {
       prisma.quotation.count({ where: { status: 'OPEN', request: { rfq: { organizationId: orgId } } } }),
       prisma.order.aggregate({ where: { organizationId: orgId, status: { not: 'CANCELLED' }, paymentStatus: { in: ['PAID', 'ON_TERMS'] } }, _sum: { totalPaise: true } }),
     ]);
+    const credit = await creditSummary(prisma, orgId);
     res.json({
-      organization: { ...organization, approvalThresholdPaise: m(policy?.thresholdPaise ?? 0) },
+      credit: { creditApproved: credit.creditApproved, terms: credit.terms, limitPaise: credit.limitPaise, outstandingPaise: credit.outstandingPaise, availablePaise: credit.availablePaise, usedPercent: credit.usedPercent, overduePaise: credit.overduePaise, overdueCount: credit.overdueCount, dueSoonPaise: credit.dueSoonPaise, dueSoonCount: credit.dueSoonCount, nextDue: credit.nextDue },
+      organization: { ...organization, creditLimitPaise: m(organization.creditLimitPaise), approvalThresholdPaise: m(policy?.thresholdPaise ?? 0) },
       role: req.orgRole,
       metrics: { activeRfqs, quotesWaiting, pendingApprovals, spendPaise: m(spend._sum.totalPaise ?? 0) },
-      members: members.map((x) => ({ id: x.user.id, name: x.user.name, email: x.user.email, role: x.role, since: x.createdAt })),
+      members: members.map((x) => ({ id: x.user.id, name: x.user.name, email: x.user.email, role: x.role, since: x.createdAt, departmentId: x.departmentId })),
       rfqs: rfqs.map((r) => ({ id: r.id, number: r.number, title: r.title, status: r.status, createdAt: r.createdAt, items: r._count.items, sellers: r._count.requests, quotes: r.requests.filter((q) => q.quotation && q.quotation.status !== 'REQUESTED').length })),
       purchaseOrders: pos.map((p) => poView({ ...p, store: stores.get(p.storeId) })),
       orders: orders.map(customerOrder),
@@ -180,7 +183,22 @@ export function registerBusiness(app, { prisma, storage, config, payments }) {
     const input = poCheckoutSchema.parse(req.body);
     if (input.paymentMethod === 'ONLINE' && !payments.configured && !config.demoPayments) throw new DomainError('Online payment isn’t available right now. Choose bank transfer.', 503);
     const mem = await member(req);
-    const order = await transaction(prisma, (tx) => b2b.checkoutPurchaseOrder(tx, { member: mem, user: req.user, poId: uuid.parse(req.params.id), address: input.address, paymentMethod: input.paymentMethod, demo: !payments.configured && config.demoPayments && input.paymentMethod === 'ONLINE' }));
+    // A saved business address can be used instead of typing one; a branch address may carry its own GSTIN.
+    let address = input.address;
+    let billingGstin = null;
+    if (input.addressId) {
+      const saved = await prisma.address.findUnique({ where: { id: input.addressId } });
+      if (!saved || saved.organizationId !== req.organizationId) throw new DomainError('Choose one of your business addresses', 404);
+      address = { name: saved.name, phone: saved.phone, line1: saved.line1, ...(saved.line2 ? { line2: saved.line2 } : {}), city: saved.city, state: saved.state, pincode: saved.pincode };
+      billingGstin = saved.gstin ?? null;
+    }
+    // The order is booked to the buyer's department unless they pick another one.
+    let departmentId = input.departmentId === undefined ? mem.departmentId ?? null : input.departmentId;
+    if (departmentId) {
+      const dept = await prisma.orgDepartment.findUnique({ where: { id: departmentId } });
+      if (!dept || dept.organizationId !== req.organizationId) throw new DomainError('Department not found', 404);
+    }
+    const order = await transaction(prisma, (tx) => b2b.checkoutPurchaseOrder(tx, { member: mem, user: req.user, poId: uuid.parse(req.params.id), address, billingGstin, departmentId, paymentMethod: input.paymentMethod, demo: !payments.configured && config.demoPayments && input.paymentMethod === 'ONLINE' }));
     res.status(201).json({ order: customerOrder(await prisma.order.findUnique({ where: { id: order.id }, include: orderDetailInclude })) });
   });
 

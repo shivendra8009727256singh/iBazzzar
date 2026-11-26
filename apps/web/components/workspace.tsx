@@ -21,9 +21,9 @@ export function WorkspaceShell({ title, nav, children, header, gate }: { title: 
   const active = (n: NavItem) => (n.exact ? pathname === n.href : pathname === n.href || pathname.startsWith(`${n.href}/`));
   return (
     <div className="container-page py-6 md:py-8">
-      {header}
-      <div className="grid gap-6 lg:grid-cols-[230px_1fr]">
-        <aside aria-label={`${title} menu`} className="min-w-0">
+      {header && <div className="print:hidden">{header}</div>}
+      <div className="grid gap-6 lg:grid-cols-[230px_1fr] print:block">
+        <aside aria-label={`${title} menu`} className="min-w-0 print:hidden">
           <div className="lg:sticky lg:top-28 lg:rounded-3xl lg:bg-white lg:border lg:border-line lg:shadow-card lg:p-3">
           <div className="hidden lg:flex items-center gap-3 px-2 pt-1 pb-3 mb-2 border-b border-line">
             <span className="size-10 shrink-0 rounded-xl bg-gradient-to-br from-emerald to-forest text-gold-light grid place-items-center font-display">{user.name.charAt(0).toUpperCase()}</span>

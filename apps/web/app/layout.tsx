@@ -38,11 +38,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <SiteProvider site={withDefaults(data?.site)} slides={data?.slides ?? []}>
         <Providers>
           <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[60] focus:bg-white focus:p-3 focus:rounded-lg">Skip to content</a>
-          <Header />
+          <div className="contents print:hidden"><Header /></div>
           <main id="main" className="min-h-[60vh] pb-16 md:pb-0">{children}</main>
-          <Footer />
-          <Assistant />
-          <MobileTabBar />
+          <div className="contents print:hidden"><Footer /><Assistant /><MobileTabBar /></div>
         </Providers>
         </SiteProvider>
       </body>

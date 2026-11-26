@@ -205,3 +205,15 @@ simultaneous orders (per customer and overall limit), saved order equals the cou
 - Dashboards, analytics, seller balances and payouts count every order, including simulated online payments, as real sales.
 - No "Demo" badge, filter or notice anywhere; a simulated payment shows as "Paid" with a `txn_` reference and a simulated refund as "Processed".
 - The internal `demo` column is kept (not shown) so `npm run db:seed:sample -- --remove-demo` can still clear sample records before launch. Production cannot simulate payments (DEMO_PAYMENTS is refused there).
+
+## Step C: business buying (B2B) — 2026-11-26
+- **Credit & dues** (`/business/credit`): limit, outstanding, available, overdue and due-soon amounts, every open credit order with its due date, and recently paid ones (on time / late). Overdue credit pauses new credit purchases until cleared.
+- **Reminders**: 3 days before, on the due date, 1 day and 7 days overdue (buyer by email + in-app; owners/approvers in-app). Quotes get a reminder 24 hours before they expire and are marked EXPIRED afterwards. Runs every 15 minutes in the API and every 30 minutes in the worker; each reminder is recorded in `sent_reminders` so it is sent once.
+- **Documents**: printable purchase order (both GSTINs, HSN-wise lines, CGST/SGST or IGST split, amount in words, terms, requested/approved/confirmed) for the business and the seller. Business invoices are billed to the company's legal name and registered address with its GSTIN, with a separate ship-to.
+- **Statement** (`/business/statement`): month picker; orders, payments, credit account (opening + bought on credit − paid = closing), overdue; print/PDF and Excel (CSV).
+- **Spending** (`/business/spend`): by person and by department against monthly budgets; 6-month trend; CSV.
+- **Addresses** (`/business/addresses`): head office, warehouses and branches (a branch can carry its own GSTIN, used on the invoice); pick one at PO checkout.
+- **Departments** (Team & settings): optional monthly budgets, members assigned; orders are booked to the buyer's department; checkout warns when an order goes over budget.
+- **Order again**: "Request again" on a request and "Order again" on a purchase order pre-fill a new request for the same sellers.
+- Orders now keep `paidAt`; a credit payment keeps its due date. Migration `202611280001_b2b_finance` (additive) applied to Aiven.
+- Tests: 166 API (14 new in `tests/b2b-finance.test.js`), 14 browser (new `tests/e2e/business.spec.js`).

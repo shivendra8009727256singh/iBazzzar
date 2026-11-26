@@ -32,7 +32,7 @@ export async function lockOrder(tx, orderId) {
  * Persists a priced quote as an order.
  * @param q quote from pricing.quote (must include tax, i.e. computed with a delivery state)
  */
-export async function createOrder(tx, { user, organizationId = null, purchaseOrderId = null, q, address, billingGstin, paymentMethod, demo = false }) {
+export async function createOrder(tx, { user, organizationId = null, purchaseOrderId = null, departmentId = null, q, address, billingGstin, paymentMethod, demo = false }) {
   if (q.taxPaise == null) throw new DomainError('Choose a delivery address before placing the order');
   if (!q.serviceable) throw new DomainError('We can’t deliver to this PIN code yet. Please use another address.', 409);
   if (paymentMethod === 'COD' && !q.payment.cod.available) throw new DomainError(q.payment.cod.reason || 'Cash on delivery isn’t available for this order', 409);
@@ -48,7 +48,7 @@ export async function createOrder(tx, { user, organizationId = null, purchaseOrd
   const number = await nextNumber(tx, 'order', 'IBZ');
   const order = await tx.order.create({
     data: {
-      number, userId: user.id, organizationId, purchaseOrderId, mode: q.mode,
+      number, userId: user.id, organizationId, purchaseOrderId, departmentId, mode: q.mode,
       status: immediate ? 'CONFIRMED' : 'AWAITING_PAYMENT', paymentStatus, paymentMethod, paymentDueAt,
       subtotalPaise: q.subtotalPaise, discountPaise: q.discountPaise, shippingPaise: q.shippingPaise, codFeePaise: q.codFeePaise,
       taxPaise: q.taxPaise, totalPaise: q.totalPaise, couponCode: q.coupon?.code ?? null,
@@ -135,7 +135,7 @@ export async function applyPayment(tx, orderId, { paymentStatus, reference, acto
   if (amountPaise != null && amountPaise !== toPaise(order.totalPaise)) throw new DomainError('Payment amount does not match the order', 400);
 
   await inventory.consumeReservations(tx, order.id, `order:${order.number}`);
-  const updated = await tx.order.update({ where: { id: order.id }, data: { status: 'CONFIRMED', paymentStatus, paymentRef: reference ?? null, paymentDueAt: null } });
+  const updated = await tx.order.update({ where: { id: order.id }, data: { status: 'CONFIRMED', paymentStatus, paymentRef: reference ?? null, paymentDueAt: null, paidAt: new Date() } });
   await history(tx, order.id, 'CONFIRMED', { note: `Payment received${reference ? ` (${reference})` : ''}`, actorId });
   await audit(tx, { actorId, action: paymentStatus === 'DEMO_SIMULATED' ? 'payment.demo-simulated' : 'payment.captured', entityType: 'order', entityId: order.id, metadata: { reference } });
   await announceConfirmed(tx, updated);
@@ -223,7 +223,7 @@ async function syncOrderStatus(tx, orderId, actorId) {
   const data = {};
   if (status !== order.status) data.status = status;
   // Cash is collected when the last live parcel is delivered.
-  if (order.paymentStatus === 'COD_PENDING' && status === 'DELIVERED') data.paymentStatus = 'COD_COLLECTED';
+  if (order.paymentStatus === 'COD_PENDING' && status === 'DELIVERED') { data.paymentStatus = 'COD_COLLECTED'; data.paidAt = new Date(); }
   if (Object.keys(data).length) {
     await tx.order.update({ where: { id: orderId }, data });
     if (data.status) await history(tx, orderId, status, { actorId });
@@ -405,7 +405,8 @@ export async function recordTermsPayment(tx, orderId, { reference, actorId }) {
   const order = await lockOrder(tx, orderId);
   if (!order) throw new DomainError('Order not found', 404);
   if (order.paymentStatus !== 'ON_TERMS') throw new DomainError('This order is not on credit terms', 409);
-  const updated = await tx.order.update({ where: { id: orderId }, data: { paymentStatus: 'PAID', paymentRef: reference, paymentDueAt: null } });
+  // The due date stays on the order so statements can show whether the business paid on time.
+  const updated = await tx.order.update({ where: { id: orderId }, data: { paymentStatus: 'PAID', paymentRef: reference, paidAt: new Date() } });
   await history(tx, orderId, 'TERMS_PAID', { note: `Payment received (${reference})`, actorId });
   await audit(tx, { actorId, action: 'payment.terms-received', entityType: 'order', entityId: orderId, metadata: { reference } });
   await notifyCustomer(tx, order.userId, { kind: 'payment.received', title: 'Payment received', body: `We’ve recorded payment for ${order.number}. Thank you.`, link: `/account/orders/${orderId}` });

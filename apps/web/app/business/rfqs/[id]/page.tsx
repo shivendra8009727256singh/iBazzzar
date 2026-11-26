@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Paperclip, MessageSquare, Store, Trophy } from 'lucide-react';
+import { Paperclip, MessageSquare, Store, Trophy, Repeat2 } from 'lucide-react';
 import { api, post } from '@/lib/api';
 import { cn, formatDate, formatDateTime, formatMoney, label } from '@/lib/format';
 import { Alert, Badge, Button, ConfirmButton, Spinner, StatusBadge, Textarea } from '@/components/ui';
@@ -63,7 +63,10 @@ export default function RfqDetail({ params }: { params: Promise<{ id: string }> 
         <ul className="grid gap-1">{rfq.items.map((i) => <li key={i.id} className="flex justify-between text-[15px]"><span>{i.description}</span><strong>{i.quantity} units</strong></li>)}</ul>
         <p className="text-muted whitespace-pre-line text-[15px]">{rfq.notes}</p>
         {data.attachments.length > 0 && <div className="flex flex-wrap gap-2">{data.attachments.map((a) => <a key={a.id} href={a.url} className="badge badge-neutral" target="_blank" rel="noreferrer"><Paperclip size={12} />{a.name}</a>)}</div>}
-        {['OPEN', 'QUOTED'].includes(rfq.status) && <ConfirmButton danger title="Cancel this request?" body="Sellers will stop quoting. Open quotations are withdrawn." confirmLabel="Cancel request" onConfirm={async () => { await post(`/business/rfqs/${id}/cancel`); refetch(); }}>Cancel request</ConfirmButton>}
+        <div className="flex flex-wrap gap-2">
+          {['OPEN', 'QUOTED'].includes(rfq.status) && <ConfirmButton danger title="Cancel this request?" body="Sellers will stop quoting. Open quotations are withdrawn." confirmLabel="Cancel request" onConfirm={async () => { await post(`/business/rfqs/${id}/cancel`); refetch(); }}>Cancel request</ConfirmButton>}
+          <Link href={`/business/rfqs/new?from=${id}`} className="btn btn-outline btn-sm"><Repeat2 size={15} />Request again</Link>
+        </div>
       </section>
       {data.purchaseOrderId && <Alert tone="success" title="A quotation was accepted">See it under <Link href="/business/purchase-orders" className="underline">Purchase orders</Link>.</Alert>}
 

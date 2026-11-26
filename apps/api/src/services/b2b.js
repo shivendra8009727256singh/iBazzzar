@@ -6,6 +6,7 @@ import { audit, notify, notifyStoreOwners, notifyOrgApprovers } from '../lib/aud
 import { nextNumber } from '../lib/sequence.js';
 import { loadListings, sellableListingWhere } from './catalog.js';
 import { createOrder, creditOutstanding } from './orders.js';
+import { assertNoOverdue } from './b2b-finance.js';
 
 export async function requireMembership(db, userId, organizationId, permission) {
   const m = organizationId && await db.organizationMember.findUnique({
@@ -200,7 +201,7 @@ export async function sellerConfirmPo(tx, { storeId, user, poId }) {
 const TERM_DAYS = { PREPAID: 0, NET_15: 15, NET_30: 30, NET_45: 45 };
 
 /** Turns a seller-confirmed PO into an order at the negotiated prices. Idempotent per PO. */
-export async function checkoutPurchaseOrder(tx, { member, user, poId, address, paymentMethod, demo }) {
+export async function checkoutPurchaseOrder(tx, { member, user, poId, address, billingGstin = null, departmentId = null, paymentMethod, demo }) {
   if (!orgCan(member.role, 'po.checkout')) throw new DomainError('Your role can’t place orders', 403);
   const po = await lockPo(tx, poId);
   if (!po || po.organizationId !== member.organizationId) throw new DomainError('Purchase order not found', 404);
@@ -216,6 +217,7 @@ export async function checkoutPurchaseOrder(tx, { member, user, poId, address, p
     if (!po.organization.creditApproved || TERM_DAYS[po.organization.allowedTerms] < TERM_DAYS[po.paymentTerms]) {
       throw new DomainError('Your business account isn’t approved for these payment terms. Pay online or by bank transfer.', 403);
     }
+    await assertNoOverdue(tx, po.organizationId);
     // Credit is capped: unpaid credit-terms orders plus this one must stay within the limit finance set.
     const limit = toPaise(po.organization.creditLimitPaise);
     const outstanding = await creditOutstanding(tx, po.organizationId);
@@ -254,7 +256,7 @@ export async function checkoutPurchaseOrder(tx, { member, user, poId, address, p
   };
   const order = await createOrder(tx, {
     user, organizationId: po.organizationId, purchaseOrderId: po.id, q, address,
-    billingGstin: po.organization.gstin, paymentMethod, demo,
+    billingGstin: billingGstin ?? po.organization.gstin, departmentId, paymentMethod, demo,
   });
   await tx.purchaseOrder.update({ where: { id: po.id }, data: { status: 'ORDERED' } });
   await tx.purchaseOrderHistory.create({ data: { purchaseOrderId: po.id, status: 'ORDERED', actorId: user.id, note: `Order ${order.number}` } });

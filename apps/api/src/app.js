@@ -11,6 +11,7 @@ import { registerReviews } from './modules/reviews.js';
 import { registerCart } from './modules/cart.js';
 import { registerOrders } from './modules/orders.js';
 import { registerBusiness } from './modules/business.js';
+import { registerBusinessFinance } from './modules/business-finance.js';
 import { registerSeller } from './modules/seller.js';
 import { registerCommunity } from './modules/community.js';
 import { registerAccount } from './modules/account.js';
@@ -79,6 +80,7 @@ export function createApp({ prisma, config, mailer, storage, payments, shipping,
   registerCart(app, ctx);
   registerOrders(app, ctx);
   registerBusiness(app, ctx);
+  registerBusinessFinance(app, ctx);
   registerSeller(app, ctx);
   registerCommunity(app, ctx);
   registerAccount(app, ctx);

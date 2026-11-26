@@ -19,6 +19,7 @@ import * as b2b from '../services/b2b.js';
 import { shipmentFlow } from '../integrations/shipping.js';
 import { getSetting } from '../services/settings.js';
 import { poView } from './business.js';
+import { purchaseOrderDocument } from './business-finance.js';
 import { invoiceData, orderDetailInclude } from './orders.js';
 
 const m = toPaise;
@@ -311,6 +312,11 @@ export function registerSeller(app, { prisma, storage, shipping, config }) {
   app.get('/api/seller/purchase-orders', seller, async (req, res) => {
     const rows = await prisma.purchaseOrder.findMany({ where: { storeId: req.storeId, status: { not: 'PENDING_APPROVAL' } }, orderBy: { createdAt: 'desc' }, take: 100, include: { history: { orderBy: { createdAt: 'asc' } }, order: true } });
     res.json({ purchaseOrders: rows.map((p) => ({ ...poView(p), order: p.order ? { number: p.order.number, status: p.order.status } : null })) });
+  });
+  app.get('/api/seller/purchase-orders/:id', seller, async (req, res) => {
+    const po = await prisma.purchaseOrder.findUnique({ where: { id: uuid.parse(req.params.id) } });
+    if (!po || po.storeId !== req.storeId || po.status === 'PENDING_APPROVAL') throw new DomainError('Purchase order not found', 404);
+    res.json({ document: await purchaseOrderDocument(prisma, po) });
   });
   app.post('/api/seller/purchase-orders/:id/confirm', seller, async (req, res) => {
     const po = await transaction(prisma, (tx) => b2b.sellerConfirmPo(tx, { storeId: req.storeId, user: req.user, poId: uuid.parse(req.params.id) }));

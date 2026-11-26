@@ -237,7 +237,8 @@ type OrgRow = { id: string; legalName: string; tradeName: string | null; status:
 type Org360 = {
   organization: OrgRow & { approvalThresholdPaise: number; verifications: { id: string; kind: string; status: string; createdAt: string }[] };
   members: { id: string; name: string; email: string; role: string }[];
-  stats: { spendPaise: number; paidOrders: number; outstandingPaise: number; availableCreditPaise: number };
+  stats: { spendPaise: number; paidOrders: number; outstandingPaise: number; availableCreditPaise: number; overduePaise: number; overdueCount: number; dueSoonPaise: number };
+  dues: { orderId: string; number: string; placedBy: string; dueAt: string | null; amountPaise: number; daysLeft: number | null; state: string }[];
   orders: { id: string; number: string; createdAt: string; status: string; paymentStatus: string; paymentMethod: string; totalPaise: number; paymentDueAt: string | null }[];
   rfqs: { id: string; number: string; title: string; status: string; createdAt: string }[];
   purchaseOrders: { id: string; number: string; status: string; totalPaise: number; paymentTerms: string; createdAt: string }[];
@@ -298,6 +299,18 @@ function OrgDrawer({ id, can, onClose }: { id: string; can: Can; onClose: () => 
           ['Paid spend', formatMoney(data.stats.spendPaise), `${data.stats.paidOrders} orders`], ['Outstanding on credit', formatMoney(data.stats.outstandingPaise)],
           ['Credit limit', o.creditApproved ? formatMoney(o.creditLimitPaise) : '—'], ['Available credit', o.creditApproved ? formatMoney(data.stats.availableCreditPaise) : '—'],
         ]} />
+        {data.dues.length > 0 && (
+          <Panel title="Credit dues" actions={data.stats.overdueCount ? <Badge tone="danger">{formatMoney(data.stats.overduePaise)} overdue</Badge> : undefined}>
+            <Table head={['Order', 'Placed by', 'Due', 'Status', 'Amount']}>{data.dues.map((x) => (
+              <tr key={x.orderId} className={x.state === 'OVERDUE' ? 'bg-danger-bg/40' : undefined}>
+                <td><Link href={`/admin/orders?open=${x.orderId}`} className="font-semibold hover:underline">{x.number}</Link></td><td>{x.placedBy}</td><td>{formatDate(x.dueAt)}</td>
+                <td>{x.daysLeft == null ? '—' : x.daysLeft < 0 ? <Badge tone="danger">{-x.daysLeft}d overdue</Badge> : x.daysLeft <= 3 ? <Badge tone="warning">{x.daysLeft === 0 ? 'Due today' : `Due in ${x.daysLeft}d`}</Badge> : <Badge tone="info">In {x.daysLeft}d</Badge>}</td>
+                <td className="font-semibold">{formatMoney(x.amountPaise)}</td>
+              </tr>
+            ))}</Table>
+            <p className="text-xs text-muted mt-2">Open an order and use “Record credit payment” once the business has paid. Overdue dues pause new credit purchases.</p>
+          </Panel>
+        )}
         <Panel title="Details">
           <KV items={[['GSTIN', o.gstin], ['PAN', o.pan], ['Phone', o.contactPhone], ['Registered address', `${o.registeredAddress.line1}, ${o.registeredAddress.city}, ${o.registeredAddress.state} ${o.registeredAddress.pincode}`], ['PO approval above', o.approvalThresholdPaise ? formatMoney(o.approvalThresholdPaise) : 'Every PO'], ['Members', o.memberCount]]} />
         </Panel>

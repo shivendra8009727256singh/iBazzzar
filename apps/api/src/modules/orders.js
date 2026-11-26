@@ -70,12 +70,15 @@ export function registerOrders(app, { prisma, config, payments, limits, logger }
     }
 
     let organizationId = null;
+    let departmentId = null;
     if (input.mode === 'BUSINESS') {
       const memberships = req.user?.orgMemberships ?? [];
       const m = memberships.find((x) => x.organizationId === req.session?.activeOrganizationId) ?? memberships[0];
       if (!m) throw new DomainError('Create a business account before wholesale checkout', 403);
       if (m.organization.status !== 'APPROVED') throw new DomainError('Your business account is awaiting verification', 403);
       organizationId = m.organizationId;
+      // Wholesale cart orders count against the buyer's department, like purchase orders.
+      departmentId = m.departmentId ?? null;
     }
     if (input.paymentMethod === 'BANK_TRANSFER' && input.mode !== 'BUSINESS') throw new DomainError('Bank transfer is available for business orders', 400);
     if (input.paymentMethod === 'ONLINE' && !payments.configured && !config.demoPayments) throw new DomainError('Online payment isn’t available right now. Please choose another payment method.', 503);
@@ -94,7 +97,7 @@ export function registerOrders(app, { prisma, config, payments, limits, logger }
         throw new DomainError('Prices in your cart changed. Please review the new total before placing your order.', 409, { quote: publicQuote(q) });
       }
       const created = await orders.createOrder(tx, {
-        user, organizationId, q, address: input.address, billingGstin: input.billingGstin, paymentMethod: input.paymentMethod,
+        user, organizationId, departmentId, q, address: input.address, billingGstin: input.billingGstin, paymentMethod: input.paymentMethod,
         // Only a simulated online payment is demo money; COD, bank transfer and credit terms are real commitments.
         demo: !payments.configured && config.demoPayments && input.paymentMethod === 'ONLINE',
       });
@@ -325,10 +328,13 @@ export async function invoiceData(prisma, order, parcelId) {
   const store = await prisma.sellerStore.findUnique({ where: { id: so.storeId } });
   const items = order.items.filter((i) => i.sellerOrderId === so.id);
   const sum = (k) => items.reduce((s, i) => s + money(i[k]), 0);
+  const org = order.organizationId ? await prisma.organization.findUnique({ where: { id: order.organizationId }, select: { legalName: true, tradeName: true, registeredAddress: true } }) : null;
+  const shipTo = { name: order.shippingAddress.name, address: order.shippingAddress };
   return {
     number: so.invoice.number, financialYear: so.invoice.financialYear, issuedAt: so.invoice.issuedAt, orderNumber: order.number, orderDate: order.createdAt,
     seller: { name: store.legalName, tradeName: store.name, gstin: store.gstin, pan: store.pan, address: store.pickupAddress, stateCode: store.stateCode, gstRegistered: store.gstRegistered },
-    buyer: { name: order.shippingAddress.name, address: order.shippingAddress, gstin: order.billingGstin },
+    buyer: org ? { name: org.legalName, tradeName: org.tradeName, address: org.registeredAddress, gstin: order.billingGstin, business: true } : { name: order.shippingAddress.name, address: order.shippingAddress, gstin: order.billingGstin, business: false },
+    shipTo,
     placeOfSupply: order.placeOfSupply, reverseCharge: false,
     items: items.map((i) => ({ name: i.name, variantLabel: i.variantLabel, sku: i.sku, hsnCode: i.hsnCode, quantity: i.quantity, unitPaise: money(i.unitPaise), discountPaise: money(i.discountPaise), taxablePaise: money(i.taxablePaise), taxRateBps: i.taxRateBps, cgstPaise: money(i.cgstPaise), sgstPaise: money(i.sgstPaise), igstPaise: money(i.igstPaise), totalPaise: money(i.totalPaise) })),
     totals: { taxablePaise: sum('taxablePaise'), cgstPaise: sum('cgstPaise'), sgstPaise: sum('sgstPaise'), igstPaise: sum('igstPaise'), shippingPaise: money(so.shippingPaise), totalPaise: money(so.totalPaise) },

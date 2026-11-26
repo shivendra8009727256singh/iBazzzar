@@ -6,11 +6,13 @@ import { api } from '@/lib/api';
 import type { Order } from '@/lib/types';
 import { formatDate, formatMoney } from '@/lib/format';
 import { OrderRow } from '@/components/order-bits';
+import { CreditMeter, type CreditSnapshot } from '@/components/business-bits';
 import { Alert, Empty, PageHeader, Spinner, Stat, StatusBadge } from '@/components/ui';
 
 type Overview = {
   organization: { legalName: string; tradeName: string | null; status: string; gstin: string | null; approvalThresholdPaise: number; creditApproved: boolean; allowedTerms: string };
   role: string;
+  credit: CreditSnapshot;
   metrics: { activeRfqs: number; quotesWaiting: number; pendingApprovals: number; spendPaise: number };
   rfqs: { id: string; number: string; title: string; status: string; createdAt: string; items: number; sellers: number; quotes: number }[];
   purchaseOrders: { id: string; number: string; status: string; sellerName: string; totalPaise: number; createdAt: string }[];
@@ -27,6 +29,7 @@ export default function BusinessOverview() {
       <PageHeader eyebrow={`Business · ${data.role.toLowerCase()}`} title={o.tradeName || o.legalName} description={<>{o.gstin ? `GSTIN ${o.gstin} · ` : 'Not GST-registered · '}Auto-approve purchase orders up to {o.approvalThresholdPaise ? formatMoney(o.approvalThresholdPaise) : '—'}{o.creditApproved ? ` · Credit terms: ${o.allowedTerms.replace('_', ' ')}` : ''}</>}
         actions={o.status === 'APPROVED' && <Link href="/business/rfqs/new" className="btn btn-primary"><Plus size={16} />Request a quote</Link>} />
       {o.status !== 'APPROVED' && <div className="mb-5"><Alert tone="warning" title="Verification in progress">Our team is reviewing your business details. You’ll be notified when quotations and wholesale checkout are enabled.</Alert></div>}
+      {o.status === 'APPROVED' && <div className="mb-6"><CreditMeter credit={data.credit} compact /></div>}
       <div className="grid gap-4 grid-cols-2 xl:grid-cols-4 mb-8">
         <Stat label="Open requests" value={data.metrics.activeRfqs} icon={<ClipboardList size={18} />} />
         <Stat label="Quotes to review" value={data.metrics.quotesWaiting} icon={<Hourglass size={18} />} tone="gold" />

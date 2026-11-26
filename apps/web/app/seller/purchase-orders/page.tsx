@@ -1,7 +1,8 @@
 'use client';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { FileCheck2 } from 'lucide-react';
+import Link from 'next/link';
+import { FileCheck2, FileText } from 'lucide-react';
 import { api, post } from '@/lib/api';
 import { formatDate, formatMoney, label } from '@/lib/format';
 import { ConfirmButton, Empty, PageHeader, Spinner, StatusBadge } from '@/components/ui';
@@ -26,6 +27,7 @@ export default function SellerPosPage() {
               <div className="mt-4 flex flex-wrap gap-2 items-center">
                 {p.status === 'APPROVED' && <ConfirmButton variant="primary" title={`Confirm ${p.number}?`} body="You commit to supplying these items at the agreed price." confirmLabel="Confirm PO" onConfirm={async () => { await post(`/seller/purchase-orders/${p.id}/confirm`); toast.success('Confirmed'); refetch(); }}>Confirm</ConfirmButton>}
                 {p.order && <span className="text-sm text-muted">Ordered as {p.order.number} · {label(p.order.status)}</span>}
+                <Link href={`/seller/purchase-orders/${p.id}`} className="btn btn-ghost btn-sm"><FileText size={15} />PO document (PDF)</Link>
               </div>
             </article>
           ))}

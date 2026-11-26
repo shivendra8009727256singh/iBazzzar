@@ -286,8 +286,19 @@ export const quoteSchema = z.object({
 });
 export const messageSchema = z.object({ body: z.string().trim().min(2).max(3000) });
 export const poCheckoutSchema = z.object({
-  address: addressSchema.omit({ label: true, isDefault: true }),
+  // Either a new delivery address or one of the business account's saved addresses.
+  address: addressSchema.omit({ label: true, isDefault: true }).optional(),
+  addressId: z.uuid().optional(),
+  departmentId: z.uuid().nullable().optional(),
   paymentMethod: z.enum(['ONLINE', 'BANK_TRANSFER', 'CREDIT_TERMS']).default('ONLINE'),
+}).refine((v) => v.address || v.addressId, { message: 'Choose a delivery address', path: ['address'] });
+
+/** A saved business address (head office, warehouse, branch). A branch can have its own GSTIN. */
+export const businessAddressSchema = addressSchema.extend({ label: z.string().trim().min(2, 'Give this address a name, e.g. Pune warehouse').max(40) });
+
+export const departmentSchema = z.object({
+  name: z.string().trim().min(2, 'Department name is too short').max(40),
+  monthlyBudgetPaise: z.number().int().min(0).max(100_000_000_000).default(0),
 });
 
 // ───────────── Admin ─────────────
