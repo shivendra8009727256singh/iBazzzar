@@ -217,3 +217,9 @@ simultaneous orders (per customer and overall limit), saved order equals the cou
 - **Order again**: "Request again" on a request and "Order again" on a purchase order pre-fill a new request for the same sellers.
 - Orders now keep `paidAt`; a credit payment keeps its due date. Migration `202611280001_b2b_finance` (additive) applied to Aiven.
 - Tests: 166 API (14 new in `tests/b2b-finance.test.js`), 14 browser (new `tests/e2e/business.spec.js`).
+
+## Account security: signed-in devices — 2026-11-26
+- **Profile & security → Signed-in devices** shows each device by a short name ("Chrome on Windows"), when it was signed in, and when it was last active (refreshed at most every 5 minutes, so it costs requests nothing).
+- **Sign out a device** remotely, or **Sign out all other devices** at once. A signed-out device is also forgotten, so if it signs in again the owner is alerted.
+- **New sign-in alert**: a browser is recognised by a long-lived `ib_device` cookie (stored hashed in `known_devices`). A sign-in from a browser the account hasn't used before sends an email and an in-app notice with device, time (IST) and IP. Not sent at registration or for an account's first recorded device, so existing accounts aren't all alerted after this release. Changing the password forgets every other device.
+- Migration `202611290001_device_security` (additive: `sessions.lastSeenAt`, `sessions.deviceId`, `known_devices`) applied to Aiven. Tests: `tests/devices.test.js` (7); 175 API tests passing.

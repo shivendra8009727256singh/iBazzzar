@@ -264,6 +264,7 @@ model User {
   updatedAt        DateTime   @updatedAt @db.Timestamptz(3)
 
   sessions            Session[]
+  knownDevices        KnownDevice[]
   roles               UserRole[]
   addresses           Address[]
   orgMemberships      OrganizationMember[]
@@ -292,11 +293,29 @@ model Session {
   ip                   String?
   expiresAt            DateTime @db.Timestamptz(3)
   createdAt            DateTime @default(now()) @db.Timestamptz(3)
+  /// Last request made with this session (updated at most every few minutes).
+  lastSeenAt           DateTime @default(now()) @db.Timestamptz(3)
+  /// The browser (known_devices.id) this session was started from.
+  deviceId             String?
   user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([expiresAt])
   @@map("sessions")
+}
+
+/// Browsers that have signed in to an account, identified by a long-lived random cookie (stored hashed). A sign-in from
+/// a browser not on this list sends the account owner a "new sign-in" alert.
+model KnownDevice {
+  userId      String   @db.Uuid
+  id          String   // sha256 of the ib_device cookie value
+  userAgent   String?
+  firstSeenAt DateTime @default(now()) @db.Timestamptz(3)
+  lastSeenAt  DateTime @default(now()) @db.Timestamptz(3)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, id])
+  @@map("known_devices")
 }
 
 /// Marketplace staff roles. Customer, business and seller abilities come from memberships, not from this table.

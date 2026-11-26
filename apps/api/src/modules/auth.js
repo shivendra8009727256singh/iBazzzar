@@ -9,8 +9,11 @@ import { audit } from '../lib/audit.js';
 import { slugify } from '../lib/http.js';
 import { transaction } from '../lib/db.js';
 import { emailHtml } from '../integrations/mailer.js';
+import { notifyCustomer } from '../lib/email.js';
+import { deviceName } from '../../../../packages/shared/src/index.js';
 import {
-  SESSION_COOKIE, SESSION_DAYS, ADMIN_SESSION_HOURS, LEGACY_COOKIE_PATHS, cookieOptions, publicUser, requireAuth, sessionTokens,
+  SESSION_COOKIE, SESSION_DAYS, ADMIN_SESSION_HOURS, LEGACY_COOKIE_PATHS, DEVICE_COOKIE, DEVICE_COOKIE_DAYS,
+  cookieOptions, publicUser, requireAuth, sessionTokens,
 } from '../http/middleware.js';
 
 export const MAX_FAILED_LOGINS = 5;
@@ -67,15 +70,58 @@ export function registerAuth(app, { prisma, config, mailer, limits }) {
   const clearLegacyCookies = (res) => {
     for (const path of LEGACY_COOKIE_PATHS) res.clearCookie(SESSION_COOKIE, { httpOnly: true, sameSite: 'lax', secure: config.production, path });
   };
-  const startSession = async (req, res, userId, { hours } = {}) => {
+  /**
+   * Recognises this browser by its ib_device cookie (set here if missing). Returns the device id (hashed cookie) and
+   * whether this account has signed in from it before. An account's very first device never counts as "new", so
+   * accounts that existed before this feature don't all get an alert on their next sign-in.
+   */
+  const recogniseDevice = async (req, res, userId, userAgent) => {
+    let token = req.cookies?.[DEVICE_COOKIE];
+    if (!/^[a-f0-9]{64}$/.test(token ?? '')) token = randomToken();
+    res.cookie(DEVICE_COOKIE, token, { httpOnly: true, sameSite: 'lax', secure: config.production, path: '/', maxAge: DEVICE_COOKIE_DAYS * 86_400_000 });
+    const id = sha256(token);
+    const now = new Date();
+    const { count: added } = await prisma.knownDevice.createMany({ data: [{ userId, id, userAgent }], skipDuplicates: true });
+    if (!added) {
+      await prisma.knownDevice.update({ where: { userId_id: { userId, id } }, data: { lastSeenAt: now, userAgent } });
+      return { deviceId: id, isNew: false };
+    }
+    // Browsers unused for over a year are forgotten, so the list can't grow without limit.
+    await prisma.knownDevice.deleteMany({ where: { userId, lastSeenAt: { lt: new Date(now.getTime() - DEVICE_COOKIE_DAYS * 86_400_000) } } });
+    const others = await prisma.knownDevice.count({ where: { userId, id: { not: id } } });
+    return { deviceId: id, isNew: others > 0 };
+  };
+
+  /** In-app notification and email: "your account was signed in from Chrome on Windows". Never blocks the sign-in. */
+  const alertNewDevice = async (req, userId, userAgent) => {
+    try {
+      const when = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+      const device = deviceName(userAgent);
+      await notifyCustomer(prisma, userId, {
+        kind: 'security.new-sign-in',
+        title: 'New sign-in to your account',
+        subject: `New sign-in to your IBazzzar account from ${device}`,
+        body: `Your account was just signed in from ${device} (${when} IST). If this was you, there’s nothing to do. If it wasn’t, change your password now — that signs out every other device — or sign that device out from Profile & security.`,
+        lines: [`Device: ${device}`, `Time: ${when} IST`, ...(req.ip ? [`IP address: ${req.ip}`] : [])],
+        link: '/account/profile#devices',
+      });
+    } catch (error) {
+      req.log?.warn({ err: error }, 'New sign-in alert failed');
+    }
+  };
+
+  const startSession = async (req, res, userId, { hours, alert = true } = {}) => {
     const token = randomToken();
     const ms = hours ? hours * 3_600_000 : SESSION_DAYS * 86_400_000;
+    const userAgent = req.get('user-agent')?.slice(0, 300) ?? null;
     // Any session this browser already had is replaced, so a stale cookie can never shadow the new one.
     const previous = sessionTokens(req);
     if (previous.length) await prisma.session.deleteMany({ where: { id: { in: previous.map(sha256) } } });
+    const { deviceId, isNew } = await recogniseDevice(req, res, userId, userAgent);
     await prisma.session.create({
-      data: { id: sha256(token), userId, expiresAt: new Date(Date.now() + ms), userAgent: req.get('user-agent')?.slice(0, 300) ?? null, ip: req.ip },
+      data: { id: sha256(token), userId, expiresAt: new Date(Date.now() + ms), userAgent, ip: req.ip, deviceId },
     });
+    if (isNew && alert) await alertNewDevice(req, userId, userAgent);
     clearLegacyCookies(res);
     res.cookie(SESSION_COOKIE, token, { ...cookieOptions(config), maxAge: ms });
   };
@@ -135,7 +181,7 @@ export function registerAuth(app, { prisma, config, mailer, limits }) {
       await audit(tx, { actorId: created.id, action: `user.registered.${input.accountType}`, entityType: 'user', entityId: created.id, ip: req.ip });
       return created;
     });
-    await startSession(req, res, user.id);
+    await startSession(req, res, user.id, { alert: false });
     let verificationSent = false;
     try { verificationSent = await sendVerification(user); } catch (error) { req.log?.warn({ err: error }, 'Verification email failed'); }
     res.status(201).json({ user: await me(user.id), verificationSent });
@@ -261,14 +307,54 @@ export function registerAuth(app, { prisma, config, mailer, limits }) {
     await transaction(prisma, async (tx) => {
       await tx.user.update({ where: { id: req.user.id }, data: { passwordHash } });
       await tx.session.deleteMany({ where: { userId: req.user.id, id: { not: req.session.id } } });
+      // Browsers signed out here are forgotten too, so signing in from one of them again raises a new-sign-in alert.
+      await tx.knownDevice.deleteMany({ where: { userId: req.user.id, ...(req.session.deviceId ? { id: { not: req.session.deviceId } } : {}) } });
       await audit(tx, { actorId: req.user.id, action: 'user.password-changed', entityType: 'user', entityId: req.user.id });
     });
     res.json({ ok: true, message: 'Password updated. Other devices were signed out.' });
   });
 
+  // Signed-in devices. Each session is referred to by the first 12 characters of its id (itself a hash of the cookie
+  // token), which is enough to tell one account's sessions apart and reveals nothing usable.
   app.get('/api/auth/sessions', requireAuth, async (req, res) => {
-    const sessions = await prisma.session.findMany({ where: { userId: req.user.id, expiresAt: { gt: new Date() } }, orderBy: { createdAt: 'desc' } });
-    res.json({ sessions: sessions.map((s) => ({ id: s.id.slice(0, 12), current: s.id === req.session.id, userAgent: s.userAgent, createdAt: s.createdAt })) });
+    const sessions = await prisma.session.findMany({ where: { userId: req.user.id, expiresAt: { gt: new Date() } }, orderBy: { lastSeenAt: 'desc' } });
+    const current = (s) => s.id === req.session.id;
+    res.json({
+      sessions: sessions
+        .sort((a, b) => Number(current(b)) - Number(current(a)))
+        .map((s) => ({ id: s.id.slice(0, 12), current: current(s), userAgent: s.userAgent, createdAt: s.createdAt, lastSeenAt: current(s) ? new Date() : s.lastSeenAt })),
+    });
+  });
+
+  /**
+   * Signs one other device out. Its browser is also forgotten, so if it signs in again the owner gets a new-sign-in
+   * alert. (This device signs out with the ordinary Sign out.)
+   */
+  app.delete('/api/auth/sessions/:id', requireAuth, async (req, res) => {
+    const prefix = z.string().regex(/^[a-f0-9]{12}$/).safeParse(req.params.id);
+    if (!prefix.success) throw new DomainError('Device not found', 404);
+    const session = await prisma.session.findFirst({ where: { userId: req.user.id, id: { startsWith: prefix.data } } });
+    if (!session) throw new DomainError('That device is already signed out', 404);
+    if (session.id === req.session.id) throw new DomainError('To sign out of this device, use Sign out in the account menu', 400);
+    await transaction(prisma, async (tx) => {
+      await tx.session.delete({ where: { id: session.id } });
+      if (session.deviceId) await tx.knownDevice.deleteMany({ where: { userId: req.user.id, id: session.deviceId } });
+      await audit(tx, { actorId: req.user.id, action: 'user.session-revoked', entityType: 'user', entityId: req.user.id, ip: req.ip, metadata: { device: deviceName(session.userAgent) } });
+    });
+    res.json({ ok: true, message: `${deviceName(session.userAgent)} has been signed out` });
+  });
+
+  /** Signs out every device except this one, and forgets those browsers. */
+  app.post('/api/auth/sessions/revoke-others', requireAuth, async (req, res) => {
+    const count = await transaction(prisma, async (tx) => {
+      const others = await tx.session.findMany({ where: { userId: req.user.id, id: { not: req.session.id } }, select: { deviceId: true } });
+      await tx.session.deleteMany({ where: { userId: req.user.id, id: { not: req.session.id } } });
+      const deviceIds = others.map((s) => s.deviceId).filter((d) => d && d !== req.session.deviceId);
+      if (deviceIds.length) await tx.knownDevice.deleteMany({ where: { userId: req.user.id, id: { in: deviceIds } } });
+      await audit(tx, { actorId: req.user.id, action: 'user.sessions-revoked', entityType: 'user', entityId: req.user.id, ip: req.ip, metadata: { count: others.length } });
+      return others.length;
+    });
+    res.json({ ok: true, count, message: count ? `Signed out of ${count} other device${count === 1 ? '' : 's'}` : 'No other devices were signed in' });
   });
 
   // An existing customer adds a business account or applies to sell.

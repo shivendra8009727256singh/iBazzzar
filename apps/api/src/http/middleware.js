@@ -8,6 +8,11 @@ import { capabilitiesOf } from '../services/permissions.js';
 
 export const SESSION_COOKIE = 'ib_session';
 export const SESSION_DAYS = 7;
+/** How often a session's "last active" time is refreshed. */
+export const LAST_SEEN_EVERY_MS = 5 * 60_000;
+/** Long-lived cookie that recognises a browser across sign-ins, for new-device alerts. Not a sign-in credential. */
+export const DEVICE_COOKIE = 'ib_device';
+export const DEVICE_COOKIE_DAYS = 395;
 
 export function cookieOptions(config) {
   return { httpOnly: true, sameSite: 'lax', secure: config.production, path: '/', maxAge: SESSION_DAYS * 86_400_000 };
@@ -55,6 +60,11 @@ export function loadSession(prisma) {
       });
       const session = sessions[0];
       if (session && session.user.status === 'ACTIVE') {
+        // "Last active" on the signed-in devices list. Written at most once per LAST_SEEN_EVERY_MS per session, and
+        // never awaited, so it costs ordinary requests nothing.
+        if (Date.now() - session.lastSeenAt.getTime() > LAST_SEEN_EVERY_MS) {
+          prisma.session.updateMany({ where: { id: session.id }, data: { lastSeenAt: new Date() } }).catch(() => {});
+        }
         req.session = session;
         req.user = session.user;
         req.staffRoles = session.user.roles.map((r) => r.role).sort((a, b) => STAFF_ORDER.indexOf(a) - STAFF_ORDER.indexOf(b));
