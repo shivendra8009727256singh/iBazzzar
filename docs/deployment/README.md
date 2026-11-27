@@ -7,15 +7,37 @@ Nothing has been deployed. Production deployment, DNS changes and live payments 
 | Component | Needs | Notes |
 | --- | --- | --- |
 | Web (`apps/web`) | Node.js 22.12+ (24 recommended) | `next start`. Reads `API_ORIGIN` at request time. |
-| API (`apps/api`) | Node.js, PostgreSQL, optional Redis | Stateless; run 2+ instances behind the web for availability. |
-| Worker (`apps/worker`) | Node.js, PostgreSQL, Redis | Exactly one instance. Expires unpaid orders every 5 minutes. |
+| API (`apps/api`) | Node.js, PostgreSQL, optional Redis | Stateless; run 2+ instances behind the web for availability. Also runs the scheduled jobs (see below). |
 | PostgreSQL | 16+, UTF-8, `pg_trgm` | Managed (Aiven, RDS, Neon, Supabase). Daily backups + point-in-time recovery. |
-| Redis | 7 | Shared rate limits and job queue. |
+| Redis | 7, optional | Shares rate limits between API instances. Without it each instance limits on its own. |
 | Object storage | S3-compatible | Product photos and documents (`STORAGE_DRIVER=s3`). Put a CDN in front via `S3_PUBLIC_URL`. |
 | Email | SMTP | Verification, password reset. `MAIL_PROVIDER=smtp`, `SMTP_URL`. |
 
-A basic shared/cPanel host cannot run this (it needs long-running Node processes and a worker). Suitable: a VPS/VM with
-Docker (`infra/compose.production.yaml`), or a platform such as Render/Railway/Fly.io/AWS (web + API + worker services).
+Needs two Node.js apps (web and API). Suitable: a VPS/VM with Docker (`infra/compose.production.yaml`), a platform such as
+Render/Railway/Fly.io/AWS, or a cPanel host with "Setup Node.js App" (Node 22.12+), terminal access and PostgreSQL.
+
+## Scheduled jobs
+
+There is no separate worker. The API runs these itself (checked every minute, each only when due):
+
+| Job | When | What |
+| --- | --- | --- |
+| `expire-unpaid-orders` | every 5 min | Cancels online/bank-transfer orders whose payment window passed and releases the reserved stock |
+| `b2b-reminders` | every 15 min | Business credit due-soon/due/overdue and quotation-expiry reminders |
+| `cleanup` | nightly 03:30 IST | Deletes expired sessions, used links and old idempotency keys |
+
+Pending customer emails are also sent every 10 seconds. Each job is a lease in `job_runs`, so it runs once per slot however
+many API instances, timers or crons ask.
+
+**Hosting that sleeps idle apps (cPanel/Passenger):** add a cron so jobs and emails keep running while nobody visits. Either
+
+```
+*/5 * * * *  curl -fsS -X POST -H "x-internal-key: <INTERNAL_API_KEY>" https://api.example.com/api/internal/jobs/run
+*/5 * * * *  cd /home/<user>/ibazzzar && node scripts/run-jobs.mjs >> logs/jobs.log 2>&1
+```
+
+`GET /api/internal/jobs` (same header) shows when each job last ran and how it went. `npm run jobs:run -- --force cleanup`
+runs a job by hand.
 
 ## Environment
 
@@ -48,7 +70,7 @@ script (it protects seller bank account numbers).
 2. Back up the database.
 3. `npm run db:migrate` (or `docker run … npx prisma migrate deploy --config apps/api/prisma.config.js`).
 4. First release only: `npm run db:seed` (reference data — tax classes, categories, policy pages). Do **not** pass `--demo` in production.
-5. Deploy API, worker, then web. Check `GET /api/health` returns `database: ok`.
+5. Deploy API, then web. Check `GET /api/health` returns `database: ok`.
 6. Admin: set `ADMIN_EMAIL` / `ADMIN_PASSWORD` (16+ random characters) in the server's secret store and run
    `npm run admin:create` once (re-run it to rotate the password). Sign in at `/admin/login` (12-hour sessions). Only one
    account ever holds the role; the script removes it from any other account.
@@ -57,7 +79,7 @@ Rollback: redeploy the previous image. Migrations are additive; if one must be u
 
 ## Staging
 
-Use a separate database, Redis and bucket with Razorpay test keys and `NEXT_PUBLIC_ALLOW_INDEXING` unset (pages send
+Use a separate database, bucket (and Redis, if used) with Razorpay test keys and `NEXT_PUBLIC_ALLOW_INDEXING` unset (pages send
 `noindex`). Point Razorpay test webhooks at `https://staging…/api/payments/webhook` with the webhook secret.
 
 ## Razorpay

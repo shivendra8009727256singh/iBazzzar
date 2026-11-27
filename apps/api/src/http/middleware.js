@@ -142,6 +142,8 @@ export function originCheck(config) {
     if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
     // Server-to-server webhooks carry no Origin; they are authenticated by their HMAC signature instead.
     if (req.originalUrl.split('?')[0] === '/api/payments/webhook') return next();
+    // Internal endpoints authenticate with the x-internal-key header, which a browser on another site can't send.
+    if (req.originalUrl.startsWith('/api/internal/')) return next();
     const origin = req.get('origin');
     const allowed = config.allowedOrigins ?? [config.origin];
     if (!allowed.includes(origin)) {

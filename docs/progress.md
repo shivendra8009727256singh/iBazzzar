@@ -223,3 +223,10 @@ simultaneous orders (per customer and overall limit), saved order equals the cou
 - **Sign out a device** remotely, or **Sign out all other devices** at once. A signed-out device is also forgotten, so if it signs in again the owner is alerted.
 - **New sign-in alert**: a browser is recognised by a long-lived `ib_device` cookie (stored hashed in `known_devices`). A sign-in from a browser the account hasn't used before sends an email and an in-app notice with device, time (IST) and IP. Not sent at registration or for an account's first recorded device, so existing accounts aren't all alerted after this release. Changing the password forgets every other device.
 - Migration `202611290001_device_security` (additive: `sessions.lastSeenAt`, `sessions.deviceId`, `known_devices`) applied to Aiven. Tests: `tests/devices.test.js` (7); 175 API tests passing.
+
+## Worker folded into the API — 2026-11-27
+- `apps/worker` (BullMQ + Redis) is gone. Its jobs run inside the API (`apps/api/src/services/jobs.js`): unpaid-order expiry every 5 min, business reminders every 15 min, clean-up nightly at 03:30 IST; checked every minute, each only when due. One deploy fewer, Redis now optional.
+- A `job_runs` row per job is a lease, so a job runs once per slot however many API instances, timers or crons ask; a lease left by a crashed run is taken over after 10 minutes. Last result and errors are kept for monitoring (`GET /api/internal/jobs`).
+- For hosts that sleep idle apps (cPanel): a cron calls `POST /api/internal/jobs/run` with `x-internal-key`, or runs `npm run jobs:run`. Both also send pending emails.
+- Fixed: on a PostgreSQL server not set to UTC (the local test database; possibly a cPanel host in India), dates written by the app were stored 5½ h off and disagreed with the database clock. Connections now always use UTC. Aiven was already UTC, so existing data is unaffected.
+- Migration `202611300001_job_runs` (additive) applied to Aiven. Tests: `tests/jobs.test.js` (9); 187 API tests passing.

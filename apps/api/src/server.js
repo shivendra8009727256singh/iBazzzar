@@ -5,7 +5,7 @@ import pino from 'pino';
 import { loadConfig } from './config.js';
 import { createApp } from './app.js';
 import { dispatchEmails } from './lib/email.js';
-import { runB2bReminders } from './services/b2b-finance.js';
+import { runDueJobs } from './services/jobs.js';
 import { createPrisma } from './lib/db.js';
 import { createMailer } from './integrations/mailer.js';
 import { createStorage } from './integrations/storage.js';
@@ -67,10 +67,13 @@ server.keepAliveTimeout = 65_000;
 const emailTimer = setInterval(() => { dispatchEmails(prisma, mailer, { logger }).catch((error) => logger.warn(`Email dispatch failed: ${error.message}`)); }, 10_000);
 emailTimer.unref();
 
-// Business dues and quotation-expiry reminders. Idempotent, so several API instances (and the worker) may run it.
-const reminderTimer = setInterval(() => { runB2bReminders(prisma).catch((error) => logger.warn(`Business reminders failed: ${error.message}`)); }, 15 * 60_000);
-reminderTimer.unref();
-setTimeout(() => { runB2bReminders(prisma).catch((error) => logger.warn(`Business reminders failed: ${error.message}`)); }, 20_000).unref();
+// Scheduled maintenance (unpaid orders, business reminders, nightly clean-up). Checked every minute; each job runs only
+// when due, and the job_runs lease keeps it to one run however many API instances or cron calls ask at the same time.
+// On hosting that puts idle apps to sleep, a cron calling POST /api/internal/jobs/run keeps it going (docs/deployment).
+const runJobs = () => runDueJobs({ prisma, logger }).catch((error) => logger.warn(`Scheduled jobs failed: ${error.message}`));
+const jobTimer = setInterval(runJobs, 60_000);
+jobTimer.unref();
+setTimeout(runJobs, 20_000).unref();
 
 async function shutdown(signal) {
   logger.info({ signal }, 'Shutting down');

@@ -1,4 +1,6 @@
 # Single-server production layout (VPS or VM). PostgreSQL is a managed service (e.g. Aiven) configured in .env.
+# Scheduled jobs (unpaid orders, reminders, clean-up) run inside the api service; there is no separate worker.
+# Redis is optional (shared rate limits).
 # Put a TLS-terminating reverse proxy (Caddy, Nginx or a cloud load balancer) in front of the "web" service on :3000.
 #   docker compose -f infra/compose.production.yaml --env-file .env up -d --build
 name: ibazzzar
@@ -7,13 +9,6 @@ services:
     build: { context: .., dockerfile: infra/Dockerfile.api }
     env_file: ../.env
     environment: { NODE_ENV: production, HOST: 0.0.0.0, PORT: "4000", REDIS_URL: "redis://redis:6379", TRUST_PROXY: "1" }
-    depends_on: [redis]
-    restart: unless-stopped
-  worker:
-    build: { context: .., dockerfile: infra/Dockerfile.api }
-    command: ["node", "apps/worker/src/index.js"]
-    env_file: ../.env
-    environment: { NODE_ENV: production, REDIS_URL: "redis://redis:6379" }
     depends_on: [redis]
     restart: unless-stopped
   web:

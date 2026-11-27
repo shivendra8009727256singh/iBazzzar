@@ -189,7 +189,7 @@ async function restockSellerOrder(tx, order, sellerOrderId, note) {
   await inventory.restock(tx, items.map((i) => ({ listingId: i.listingId, quantity: i.quantity })), 'RETURN_RESTOCK', `${order.number}: ${note}`);
 }
 
-/** Cancels unpaid orders whose payment window has passed. Run by the worker; each order is its own transaction. */
+/** Cancels unpaid orders whose payment window has passed. Run by the scheduled jobs (services/jobs.js); each order is its own transaction. */
 export async function expireUnpaid(prisma, at = new Date()) {
   const stale = await prisma.order.findMany({
     where: { status: 'AWAITING_PAYMENT', paymentDueAt: { lt: at } },

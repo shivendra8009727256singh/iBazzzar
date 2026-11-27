@@ -21,7 +21,9 @@ export function createPrisma({ databaseUrl, poolSize = 10 }) {
   // node-postgres would read sslmode itself with different meanings, so it is translated into an explicit ssl object.
   const ssl = sslFromUrl(url.searchParams.get('sslmode'));
   url.searchParams.delete('sslmode');
-  const adapter = new PrismaPg({ connectionString: url.toString(), ssl, max: poolSize });
+  // Every connection works in UTC, whatever the server's own setting. The driver sends dates without an offset, so on
+  // a server set to e.g. Asia/Kolkata they would be stored 5½ hours off and disagree with the database's now().
+  const adapter = new PrismaPg({ connectionString: url.toString(), ssl, max: poolSize, options: '-c TimeZone=UTC' });
   return new PrismaClient({ adapter });
 }
 

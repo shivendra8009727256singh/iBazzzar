@@ -14,7 +14,6 @@
     "lint": "eslint .",
     "db:generate": "npm run db:generate -w @ibazzzar/api",
     "db:migrate": "npm run db:migrate -w @ibazzzar/api",
-    "worker": "npm run start -w @ibazzzar/worker",
     "check": "npm run lint && npm test && npm run typecheck && npm run build",
     "db:seed": "npm run db:seed -w @ibazzzar/api",
     "db:seed:demo": "npm run db:seed -w @ibazzzar/api -- --demo",
@@ -22,7 +21,8 @@
     "test:e2e": "node scripts/e2e.mjs",
     "admin:create": "node scripts/create-admin.mjs",
     "db:seed:sample": "node apps/api/prisma/sample-data.js",
-    "dev:apps": "concurrently -k -n API,WEB \"npm run dev -w @ibazzzar/api\" \"npm run dev -w @ibazzzar/web\""
+    "dev:apps": "concurrently -k -n API,WEB \"npm run dev -w @ibazzzar/api\" \"npm run dev -w @ibazzzar/web\"",
+    "jobs:run": "node scripts/run-jobs.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.0",

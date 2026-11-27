@@ -19,6 +19,7 @@ import { configureEmail } from './lib/email.js';
 import { registerAdminPeople } from './modules/admin/people.js';
 import { registerAdminCommerce } from './modules/admin/commerce.js';
 import { registerAdminPlatform } from './modules/admin/platform.js';
+import { registerInternal } from './modules/internal.js';
 import { registerAdminCatalog } from './modules/admin/catalog.js';
 import { registerAdminInsights } from './modules/admin/insights.js';
 
@@ -89,6 +90,7 @@ export function createApp({ prisma, config, mailer, storage, payments, shipping,
   registerAdminCatalog(app, ctx);
   registerAdminCommerce(app, ctx);
   registerAdminPlatform(app, ctx);
+  registerInternal(app, ctx);
 
   app.use('/api', (_req, res) => res.status(404).json({ error: 'Endpoint not found' }));
   app.use(errorHandler(logger));

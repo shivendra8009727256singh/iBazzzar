@@ -1,4 +1,4 @@
-// Pure commerce rules shared by the API, the worker and the web app.
+// Pure commerce rules shared by the API and the web app.
 // Every amount is an integer number of paise. Nothing in this file touches the database.
 import { DomainError } from './errors.js';
 

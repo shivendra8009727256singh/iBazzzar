@@ -4,8 +4,8 @@
 
 ```
 apps/web      Next.js 16 (App Router, React 19, Tailwind 4). Server-renders public pages; client components for signed-in areas.
-apps/api      Express 5, native ESM JavaScript, Prisma 7 + PostgreSQL. The only writer to the database.
-apps/worker   BullMQ on Redis: expires unpaid orders, housekeeping. Shares services with the API.
+apps/api      Express 5, native ESM JavaScript, Prisma 7 + PostgreSQL. The only writer to the database. Also runs the scheduled
+              jobs (unpaid orders, business reminders, clean-up) — no separate worker or Redis queue; see services/jobs.js.
 packages/shared      Pure commerce rules (GST split, pricing, coupons, shipping, status flows, permissions, GSTIN/PAN/IFSC checks).
 packages/validation  Zod request schemas shared by API and web forms (same messages everywhere).
 ```
@@ -50,7 +50,7 @@ for prices, quantities, ownership or roles.
   CGST + SGST; otherwise IGST. Shipping and the COD fee carry 18% GST as services.
 - **Shipping**: per seller parcel — free above the threshold, else base fee plus a per-kg surcharge. Delivery estimates use
   PIN-code geography (sorting district / circle / zone) plus the seller's handling days, and are labelled as estimates.
-- **Inventory**: online and bank-transfer orders reserve stock until paid or expired (worker); COD and credit-terms orders
+- **Inventory**: online and bank-transfer orders reserve stock until paid or expired (scheduled job in the API); COD and credit-terms orders
   deduct immediately. Every change writes a `stock_movements` row.
 - **Payments**: Razorpay test mode only. An order becomes paid only through a verified checkout signature, a verified
   webhook (amount and currency re-checked), finance confirming a bank-transfer UTR, or — in local demo mode only — a clearly

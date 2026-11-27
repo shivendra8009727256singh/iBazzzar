@@ -33,8 +33,8 @@ labelled payment simulation; no money moves and demo orders are excluded from GM
 | `npm run dev` | Local database (if needed) + migrations + API (watch) + web (dev); Ctrl+C stops all |
 | `npm run dev:apps` | API + web only, for when the database is managed separately |
 | `npm run db:seed:sample` | Realistic sample data, local databases only (`-- --reset`, `-- --remove`, `-- --remove-demo`) |
-| `npm run worker` | Background jobs (needs Redis) |
-| `npm test` | 115 API/domain tests against disposable PostgreSQL (also checks migrations match the schema) |
+| `npm run jobs:run` | Run due scheduled jobs once (the API also runs them itself; for a server cron) |
+| `npm test` | API/domain tests against disposable PostgreSQL (also checks migrations match the schema) |
 | `npm run test:e2e` | Playwright browser journeys against a fresh production build (builds first) |
 | `npm run check` | lint + tests + typecheck + production build |
 | `npm run db:migrate` / `db:seed` / `db:seed:demo` | Apply migrations / reference data / demo catalogue |
@@ -45,7 +45,6 @@ labelled payment simulation; no money moves and demo orders are excluded from GM
 ```
 apps/web         Next.js storefront, account, business, seller hub and admin console
 apps/api         Express API (ESM JavaScript), Prisma/PostgreSQL
-apps/worker      BullMQ jobs
 packages/shared  Commerce rules: GST, pricing, coupons, shipping, permissions
 packages/validation  Shared Zod schemas
 docs/            architecture, database, API, deployment, UX media brief, progress

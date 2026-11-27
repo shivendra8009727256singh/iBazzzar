@@ -114,5 +114,7 @@ test('every role can open every page of its area without errors', async ({ brows
   } finally {
     await db.end();
   }
+  // This sweep uses up the per-address request limit; let the minute pass so the specs after it start with a fresh one.
+  await new Promise((resolve) => setTimeout(resolve, 61_000));
   expect(report).toEqual([]);
 });

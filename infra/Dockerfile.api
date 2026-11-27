@@ -1,14 +1,13 @@
-# IBazzzar API and worker image (Node.js 24, production dependencies only, non-root).
+# IBazzzar API image (scheduled jobs run inside it) (Node.js 24, production dependencies only, non-root).
 # Build from the repository root:  docker build -f infra/Dockerfile.api -t ibazzzar-api .
 FROM node:24-bookworm-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY apps/api/package.json apps/api/
-COPY apps/worker/package.json apps/worker/
 COPY apps/web/package.json apps/web/
 COPY packages/shared/package.json packages/shared/
 COPY packages/validation/package.json packages/validation/
-RUN npm ci --workspace @ibazzzar/api --workspace @ibazzzar/worker --include-workspace-root --omit=dev --ignore-scripts \
+RUN npm ci --workspace @ibazzzar/api --include-workspace-root --omit=dev --ignore-scripts \
  && npm install --no-save prisma@7.10.1
 
 FROM node:24-bookworm-slim
@@ -18,7 +17,6 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY package.json ./
 COPY packages ./packages
 COPY apps/api ./apps/api
-COPY apps/worker ./apps/worker
 RUN npx prisma generate --schema apps/api/prisma/schema.prisma && chown -R node:node /app
 USER node
 EXPOSE 4000

@@ -4,7 +4,6 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY apps/web/package.json apps/web/
 COPY apps/api/package.json apps/api/
-COPY apps/worker/package.json apps/worker/
 COPY packages/shared/package.json packages/shared/
 COPY packages/validation/package.json packages/validation/
 RUN npm ci --workspace @ibazzzar/web --include-workspace-root --ignore-scripts
