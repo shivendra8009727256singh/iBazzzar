@@ -16,7 +16,11 @@ type Data = {
 export default function SellerPaymentsPage() {
   const [page, setPage] = useState(1);
   const { data, error } = useQuery({ queryKey: ['seller-settlements', page], queryFn: () => api<Data>(`/seller/settlements?page=${page}`), placeholderData: keepPreviousData });
-  if (error) return <Alert>{(error as Error).message}</Alert>;
+  // Earnings and payouts are for the store owner; staff see a short explanation instead of an error.
+  if (error) {
+    const ownerOnly = (error as { status?: number }).status === 403;
+    return <><PageHeader title="Payments" /><Alert tone={ownerOnly ? 'info' : undefined}>{ownerOnly ? 'Only the store owner can see earnings, commission and payouts.' : (error as Error).message}</Alert></>;
+  }
   if (!data) return <Spinner />;
   const s = data.summary;
   return (

@@ -60,6 +60,7 @@ export default function CartPage() {
     return (
       <div className="bg-[#f5f6f2] min-h-[70vh]">
         <div className="container-page py-12">
+          <h1 className="sr-only">Your cart</h1>
           <div className="rounded-2xl border border-line bg-white shadow-card"><Empty icon={<ShoppingBag size={26} />} title="Your cart is empty" body="Find something you love, or switch to Business mode for wholesale prices." action={<div className="flex gap-2"><Link href="/products" className="btn btn-primary">Start shopping</Link><Link href="/wholesale" className="btn btn-outline">Wholesale</Link></div>} /></div>
           <SavedForLater />
         </div>

@@ -35,9 +35,13 @@ function StoreSwitcher() {
 
 export default function SellerLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { user } = useSession();
+  const activeStore = user?.stores.find((s) => s.id === user.activeStoreId) ?? user?.stores[0];
+  // Earnings and payouts are owner-only, so staff don't see a menu item that would only refuse them.
+  const nav = activeStore && activeStore.role !== 'OWNER' ? NAV.filter((n) => n.href !== '/seller/payments') : NAV;
   if (pathname === '/seller/register') return <>{children}</>;
   return (
-    <WorkspaceShell title="Seller hub" nav={NAV} header={<StoreSwitcher />}
+    <WorkspaceShell title="Seller hub" nav={nav} header={<StoreSwitcher />}
       gate={(u) => {
         if (!u.stores.length) return <div className="card"><Empty icon={<Store size={26} />} title="Open your IBazzzar store" body="Apply with your store and tax details. We review applications before you can list products." action={<Link href="/seller/register" className="btn btn-primary">Apply to sell</Link>} /></div>;
         const store = u.stores.find((s) => s.id === u.activeStoreId) ?? u.stores[0];

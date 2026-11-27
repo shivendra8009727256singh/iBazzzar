@@ -43,6 +43,18 @@ function readLocal(): { lines: CartLine[]; mode: Mode; wishlist: string[] } {
   } catch { return { lines: [], mode: 'RETAIL', wishlist: [] }; }
 }
 
+/** Saved lines plus lines added before loading finished; quantities of the same item are added together. */
+function mergeLines(saved: CartLine[], added: CartLine[]) {
+  if (!added.length) return saved;
+  const out = saved.map((l) => ({ ...l }));
+  for (const a of added) {
+    const same = out.find((l) => l.listingId === a.listingId && !l.savedForLater === !a.savedForLater);
+    if (same) same.quantity = Math.min(same.quantity + a.quantity, 10000);
+    else out.push({ ...a });
+  }
+  return out;
+}
+
 function CartProvider({ children }: { children: React.ReactNode }) {
   const { user, loading } = useSession();
   const qc = useQueryClient();
@@ -57,19 +69,27 @@ function CartProvider({ children }: { children: React.ReactNode }) {
     setModeState(data.cart.mode);
   }, []);
 
+  // Items added in the moment before we know whether the visitor is signed in. Without this, loading the saved cart
+  // would overwrite them and "Added to cart" would end with an empty cart.
+  const early = useRef<CartLine[]>([]);
+  const readyRef = useRef(false);
+  useEffect(() => { readyRef.current = ready; if (!ready) early.current = lines; }, [ready, lines]);
+
   // Guest: browser storage. Signed in: server cart, merging the guest cart once per sign-in.
   useEffect(() => {
     if (loading) return;
     const local = readLocal();
+    const pending = readyRef.current ? [] : early.current;
     if (!user) {
-      setLines(local.lines); setModeState(local.mode); setWishlist(new Set(local.wishlist)); setReady(true); merged.current = null;
+      setLines(mergeLines(local.lines, pending)); setModeState(local.mode); setWishlist(new Set(local.wishlist)); setReady(true); merged.current = null;
       return;
     }
     if (merged.current === user.id) return;
     merged.current = user.id;
     (async () => {
       try {
-        const data = await post<ServerCart>('/cart/merge', { items: local.lines.filter((l) => !l.savedForLater).map(({ listingId, quantity }) => ({ listingId, quantity })), mode: local.mode });
+        const items = mergeLines(local.lines, pending).filter((l) => !l.savedForLater).map(({ listingId, quantity }) => ({ listingId, quantity }));
+        const data = await post<ServerCart>('/cart/merge', { items, mode: local.mode });
         applyServer(data);
         if (local.wishlist.length) await post('/wishlist/merge', { ids: local.wishlist });
         const w = await api<{ ids: string[] }>('/wishlist');
